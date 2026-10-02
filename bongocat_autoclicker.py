@@ -353,16 +353,26 @@ class BongoApp:
 
         assets_dir = os.path.join(os.path.dirname(__file__), "assets")
         ico_path = os.path.join(assets_dir, "bongo.ico")
-        png_path = os.path.join(assets_dir, "bongo_icon.png")
         if os.path.exists(ico_path):
             try:
-                self.root.iconbitmap(ico_path)
+                self.root.iconbitmap(default=ico_path)
             except Exception:
-                pass
-        if HAS_PIL and os.path.exists(png_path):
+                try:
+                    self.root.iconbitmap(ico_path)
+                except Exception:
+                    pass
+
             try:
-                self.app_icon = ImageTk.PhotoImage(Image.open(png_path).resize((64, 64), Image.Resampling.LANCZOS))
-                self.root.iconphoto(True, self.app_icon)
+                self.root.update_idletasks()
+                hwnd = self.root.winfo_id()
+                h_top = user32.GetAncestor(hwnd, 2) or hwnd
+                abs_ico = os.path.abspath(ico_path)
+                h_sm = user32.LoadImageW(None, abs_ico, 1, 16, 16, 0x0010)
+                h_lg = user32.LoadImageW(None, abs_ico, 1, 32, 32, 0x0010)
+                if h_sm:
+                    user32.SendMessageW(h_top, 0x0080, 0, h_sm)
+                if h_lg:
+                    user32.SendMessageW(h_top, 0x0080, 1, h_lg)
             except Exception:
                 pass
 
