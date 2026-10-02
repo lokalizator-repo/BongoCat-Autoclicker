@@ -343,6 +343,10 @@ class RoundedStatCard:
             font = (FONT_FAMILY, 14, "bold")
         self.canvas.itemconfig(self.val_id, text=val_str, font=font)
 
+def get_resource_path(rel_path: str) -> str:
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, rel_path)
+
 class BongoApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -351,8 +355,7 @@ class BongoApp:
         self.root.resizable(False, False)
         self.root.configure(bg="#F8FAFC")
 
-        assets_dir = os.path.join(os.path.dirname(__file__), "assets")
-        ico_path = os.path.join(assets_dir, "bongo.ico")
+        ico_path = get_resource_path(os.path.join("assets", "bongo.ico"))
         if os.path.exists(ico_path):
             try:
                 self.root.iconbitmap(default=ico_path)
@@ -395,7 +398,7 @@ class BongoApp:
     def build_ui(self):
         # 1. Header Banner
         banner_loaded = False
-        banner_path = os.path.join(os.path.dirname(__file__), "assets", "banner.png")
+        banner_path = get_resource_path(os.path.join("assets", "banner.png"))
 
         if HAS_PIL and os.path.exists(banner_path):
             try:
