@@ -36,6 +36,31 @@ PIPE_READMODE_BYTE = 0x00000000
 PIPE_WAIT = 0x00000000
 INVALID_HANDLE_VALUE = -1
 
+MAX_INT32_CAP = 2_147_483_646 # BongoCat's internal SaturatingAdd limit (int.MaxValue - 1)
+
+def parse_taps_input(raw: str) -> int:
+    s = raw.strip().lower().replace(",", "").replace(" ", "").replace("_", "")
+    if not s:
+        return 100
+    if s == "max":
+        return MAX_INT32_CAP
+    mult = 1
+    if s.endswith("k"):
+        mult = 1_000
+        s = s[:-1]
+    elif s.endswith("m"):
+        mult = 1_000_000
+        s = s[:-1]
+    elif s.endswith("b"):
+        mult = 1_000_000_000
+        s = s[:-1]
+
+    try:
+        val = int(float(s) * mult)
+        return max(1, min(MAX_INT32_CAP, val))
+    except (ValueError, OverflowError):
+        return 100
+
 PRESETS = {
     "overdrive": {
         "title": "Overdrive",
@@ -45,21 +70,27 @@ PRESETS = {
     },
     "hyper": {
         "title": "Hyper",
-        "badge": "11.1k CPS",
-        "taps_per_tick": 1000,
-        "desc": "Extreme memory packet injection (1,000 taps / 90ms = ~11,111 CPS).",
-    },
-    "godmode": {
-        "title": "God Mode",
         "badge": "111k CPS",
         "taps_per_tick": 10000,
-        "desc": "Cosmic injection (10,000 taps / 90ms = ~111,111 CPS).",
+        "desc": "High-speed injection (10,000 taps / 90ms = ~111,111 CPS).",
     },
     "infinity": {
         "title": "Infinity",
         "badge": "11.1M CPS",
         "taps_per_tick": 1000000,
-        "desc": "MAXIMUM OVERKILL: 1,000,000 clicks per batch (90ms) = ~11.1 Million CPS! Tens of millions of clicks in seconds.",
+        "desc": "Massive injection (1,000,000 taps / 90ms = ~11.1 Million CPS).",
+    },
+    "omega": {
+        "title": "Omega",
+        "badge": "1.11B CPS",
+        "taps_per_tick": 100000000,
+        "desc": "Billion CPS tier (100,000,000 taps / 90ms = ~1.11 Billion CPS!).",
+    },
+    "maxcap": {
+        "title": "MAX CAP",
+        "badge": "2.14B",
+        "taps_per_tick": MAX_INT32_CAP,
+        "desc": "ABSOLUTE LIMIT: Injects 2,147,483,646 (BongoCat's hard game maximum). Instant max score in 1 single tap!",
     },
 }
 
@@ -161,7 +192,7 @@ class ClickerEngine:
         self.taps_per_tick = PRESETS.get(preset_key, PRESETS["overdrive"])["taps_per_tick"]
 
     def set_custom_taps(self, taps: int):
-        self.taps_per_tick = max(1, min(100_000_000, int(taps)))
+        self.taps_per_tick = max(1, min(MAX_INT32_CAP, int(taps)))
 
     def toggle(self):
         now = time.perf_counter()
@@ -391,18 +422,18 @@ class BongoApp:
         presets_bar.pack(fill=tk.X, pady=(0, 8))
 
         self.preset_buttons = {}
-        for key in ["overdrive", "hyper", "godmode", "infinity"]:
+        for key in ["overdrive", "hyper", "infinity", "omega", "maxcap"]:
             cfg = PRESETS[key]
             btn = tk.Button(
                 presets_bar,
                 text=f"{cfg['title']}\n({cfg['badge']})",
-                font=("Segoe UI", 8, "bold"),
+                font=("Segoe UI", 7, "bold"),
                 relief=tk.FLAT,
                 cursor="hand2",
                 pady=4,
                 command=lambda k=key: self.select_preset(k),
             )
-            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=1)
             self.preset_buttons[key] = btn
 
         # Dynamic Description Card
@@ -421,35 +452,35 @@ class BongoApp:
 
         tk.Label(taps_row, text="Clicks Per Batch (every 90ms):", font=("Segoe UI", 8, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
 
+        btn_m100k = tk.Button(
+            taps_row, text="−100k", font=("Segoe UI", 7, "bold"), width=5, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_taps(-100000)
+        )
+        btn_m100k.pack(side=tk.LEFT, padx=(3, 1))
+
         btn_m10k = tk.Button(
             taps_row, text="−10k", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
             command=lambda: self.adjust_taps(-10000)
         )
-        btn_m10k.pack(side=tk.LEFT, padx=(4, 1))
+        btn_m10k.pack(side=tk.LEFT, padx=(1, 2))
 
-        btn_m100 = tk.Button(
-            taps_row, text="−100", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
-            command=lambda: self.adjust_taps(-100)
-        )
-        btn_m100.pack(side=tk.LEFT, padx=(1, 3))
-
-        self.entry_taps = tk.Entry(taps_row, width=9, font=("Segoe UI", 9, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
-        self.entry_taps.insert(0, str(self.engine.taps_per_tick))
+        self.entry_taps = tk.Entry(taps_row, width=12, font=("Segoe UI", 9, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
+        self.entry_taps.insert(0, f"{self.engine.taps_per_tick:,}")
         self.entry_taps.pack(side=tk.LEFT, padx=2)
         self.entry_taps.bind("<Return>", self.on_entry_taps_submit)
         self.entry_taps.bind("<FocusOut>", self.on_entry_taps_submit)
-
-        btn_p100 = tk.Button(
-            taps_row, text="+100", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
-            command=lambda: self.adjust_taps(+100)
-        )
-        btn_p100.pack(side=tk.LEFT, padx=(3, 1))
 
         btn_p10k = tk.Button(
             taps_row, text="+10k", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
             command=lambda: self.adjust_taps(+10000)
         )
-        btn_p10k.pack(side=tk.LEFT, padx=(1, 4))
+        btn_p10k.pack(side=tk.LEFT, padx=(2, 1))
+
+        btn_p100k = tk.Button(
+            taps_row, text="+100k", font=("Segoe UI", 7, "bold"), width=5, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_taps(+100000)
+        )
+        btn_p100k.pack(side=tk.LEFT, padx=(1, 3))
 
         self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 8, "bold"), fg="#38A169", bg="#FFFFFF")
         self.lbl_calculated_cps.pack(side=tk.RIGHT)
@@ -457,9 +488,13 @@ class BongoApp:
         # Quick Jump Row
         quick_row = tk.Frame(inner, bg="#FFFFFF")
         quick_row.pack(fill=tk.X, pady=(2, 6))
-        tk.Label(quick_row, text="Quick Jump:", font=("Segoe UI", 8, "bold"), fg="#718096", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 4))
-        for q_val in [100, 1000, 10000, 100000, 500000, 1000000]:
-            if q_val >= 1_000_000:
+        tk.Label(quick_row, text="Quick Jump:", font=("Segoe UI", 8, "bold"), fg="#718096", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 2))
+        for q_val in [100, 10000, 1000000, 10000000, 100000000, MAX_INT32_CAP]:
+            if q_val == MAX_INT32_CAP:
+                q_txt = "MAX (2.14B)"
+            elif q_val >= 1_000_000_000:
+                q_txt = f"{q_val // 1_000_000_000}B"
+            elif q_val >= 1_000_000:
                 q_txt = f"{q_val // 1_000_000}M"
             elif q_val >= 1000:
                 q_txt = f"{q_val // 1000}k"
@@ -472,24 +507,24 @@ class BongoApp:
                 bg="#EDF2F7",
                 fg="#4A5568",
                 relief=tk.FLAT,
-                padx=4,
+                padx=3,
                 pady=1,
                 cursor="hand2",
                 command=lambda v=q_val: self.set_batch_value(v),
             )
-            q_btn.pack(side=tk.LEFT, padx=2)
+            q_btn.pack(side=tk.LEFT, padx=1)
 
         self.slider = tk.Scale(
             inner,
             from_=10,
-            to=10000,
+            to=10000000,
             orient=tk.HORIZONTAL,
             showvalue=False,
             bg="#FFFFFF",
             highlightthickness=0,
             command=self.on_slider_change,
         )
-        self.slider.set(self.engine.taps_per_tick)
+        self.slider.set(min(self.engine.taps_per_tick, 10000000))
         self.slider.pack(fill=tk.X, pady=(0, 8))
 
         # Technical Note
@@ -497,7 +532,7 @@ class BongoApp:
         note_frame.pack(fill=tk.X)
         lbl_note = tk.Label(
             note_frame,
-            text="✨ Native Direct IPC Mode: Injects clicks directly into BongoCat's memory through its native internal named pipe (BongoCatxTheFarmerWasReplaced). Zero keyboard simulation, zero interference with YouTube 2x speed, zero Windows key conflicts, and 100% click registration.",
+            text="✨ Native Direct IPC Mode: Direct memory pipe injection (BongoCatxTheFarmerWasReplaced). Accepts any number (supports 5M, 10M, 100M, MAX) up to BongoCat's hard cap of 2,147,483,646. Zero keyboard simulation, zero OS interference.",
             font=("Segoe UI", 8),
             fg="#234E52",
             bg="#E6FFFA",
@@ -514,13 +549,13 @@ class BongoApp:
         self.set_batch_value(val)
 
     def set_batch_value(self, val: int):
-        val = max(1, min(100_000_000, int(val)))
+        val = max(1, min(MAX_INT32_CAP, int(val)))
         if val > self.slider.cget("to"):
-            self.slider.configure(to=max(1_000_000, val))
-        self.slider.set(val)
+            self.slider.configure(to=val)
+        self.slider.set(min(val, self.slider.cget("to")))
         self.engine.set_custom_taps(val)
         self.entry_taps.delete(0, tk.END)
-        self.entry_taps.insert(0, str(val))
+        self.entry_taps.insert(0, f"{val:,}")
         self.update_preset_buttons_ui()
 
     def update_preset_buttons_ui(self):
@@ -534,7 +569,11 @@ class BongoApp:
 
         cfg = PRESETS.get(cur, PRESETS["overdrive"])
         cps = int(self.engine.taps_per_tick / 0.090)
-        if cps >= 1_000_000:
+        if self.engine.taps_per_tick == MAX_INT32_CAP:
+            cps_str = "MAX GAME CAP (2.14B / tap)"
+        elif cps >= 1_000_000_000:
+            cps_str = f"~{cps / 1_000_000_000:.2f}B CPS"
+        elif cps >= 1_000_000:
             cps_str = f"~{cps / 1_000_000:.2f}M CPS"
         elif cps >= 10_000:
             cps_str = f"~{cps / 1_000:.1f}k CPS"
@@ -553,14 +592,13 @@ class BongoApp:
         taps = int(val)
         self.engine.set_custom_taps(taps)
         self.entry_taps.delete(0, tk.END)
-        self.entry_taps.insert(0, str(taps))
+        self.entry_taps.insert(0, f"{taps:,}")
         self.update_preset_buttons_ui()
 
     def on_entry_taps_submit(self, event=None):
-        raw = self.entry_taps.get().strip().replace(",", "").replace(" ", "").replace("_", "")
-        if raw.isdigit():
-            val = max(1, min(100_000_000, int(raw)))
-            self.set_batch_value(val)
+        raw = self.entry_taps.get().strip()
+        val = parse_taps_input(raw)
+        self.set_batch_value(val)
 
     def adjust_taps(self, delta):
         cur = self.engine.taps_per_tick
@@ -611,14 +649,16 @@ class BongoApp:
         # Update Stats Cards
         clicks_str = f"{self.engine.total_clicks:,}"
         if len(clicks_str) > 13:
-            self.card_clicks.val_label.configure(font=("Segoe UI", 10, "bold"), text=clicks_str)
+            self.card_clicks.val_label.configure(font=("Segoe UI", 9, "bold"), text=clicks_str)
         elif len(clicks_str) > 9:
-            self.card_clicks.val_label.configure(font=("Segoe UI", 12, "bold"), text=clicks_str)
+            self.card_clicks.val_label.configure(font=("Segoe UI", 11, "bold"), text=clicks_str)
         else:
             self.card_clicks.val_label.configure(font=("Segoe UI", 14, "bold"), text=clicks_str)
 
         if not self.engine.running:
             self.card_cps.val_label.configure(text="0 CPS")
+        elif actual_cps >= 1_000_000_000:
+            self.card_cps.val_label.configure(text=f"{actual_cps / 1_000_000_000:.2f}B CPS")
         elif actual_cps >= 1_000_000:
             self.card_cps.val_label.configure(text=f"{actual_cps / 1_000_000:.2f}M CPS")
         elif actual_cps >= 10_000:

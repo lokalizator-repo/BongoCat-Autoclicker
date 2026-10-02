@@ -117,11 +117,12 @@ By hosting this Named Pipe server, our engine delivers batch taps **directly int
 
 | Preset | Batch Size | Frequency | Delivered Throughput | Notes |
 | :--- | :---: | :---: | :---: | :--- |
-| **💥 Infinity** | 1,000,000 taps | 90 ms | **~11,111,111 CPS** | 11.1 Million CPS. Adds 100M clicks in ~9 seconds! |
-| **🌌 God Mode** | 10,000 taps | 90 ms | **~111,111 CPS** | Millions of clicks in seconds. Ultra-clean acceleration. |
-| **⚡ Hyper** | 1,000 taps | 90 ms | **~11,111 CPS** | Extreme acceleration for instant progression. |
-| **🚀 Overdrive** | 100 taps | 90 ms | **~1,111 CPS** | High throughput. Standard fast farming. |
-| **🎛️ Custom** | 1–100,000,000 taps | 90 ms | **Up to 1.1B CPS** | Configurable via direct number entry, Quick Jump, or slider. |
+| **👑 MAX CAP** | 2,147,483,646 taps | Single / 90ms | **Instant 2.14B Cap** | BongoCat's hard game maximum. Instantly fills the counter! |
+| **🌌 Omega** | 100,000,000 taps | 90 ms | **~1,111,111,111 CPS** | Over 1.11 Billion CPS! Adds 1 Billion in < 1 second. |
+| **💥 Infinity** | 1,000,000 taps | 90 ms | **~11,111,111 CPS** | 11.1 Million CPS. Adds 100M clicks in ~9 seconds. |
+| **⚡ Hyper** | 10,000 taps | 90 ms | **~111,111 CPS** | High-speed smooth farm. Millions in minutes. |
+| **🚀 Overdrive** | 100 taps | 90 ms | **~1,111 CPS** | Standard direct injection. |
+| **🎛️ Custom** | 1 – 2,147,483,646 | 90 ms | **Limitless** | Supports human suffixes: `500k`, `5M`, `50M`, `1B`, `max`. |
 
 $$\text{Throughput (CPS)} = \frac{\text{Taps per Tick}}{0.090\text{ s}}$$
 
