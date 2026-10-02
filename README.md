@@ -1,4 +1,4 @@
-# Bongo Cat Turbo Clicker 🐾
+# Bongo Cat Auto Clicker 🐾
 
 > High-throughput click automation engine for **BongoCat** (Steam). Connects directly to BongoCat's native Named Pipe IPC (`\\.\pipe\BongoCatxTheFarmerWasReplaced`) for deterministic batch injection without OS keyboard simulation.
 
@@ -153,8 +153,8 @@ $$\text{Throughput (CPS)} = \frac{\text{Taps per Tick}}{0.090\text{ s}}$$
 ### Launching the Application
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/bongocat-turbo-clicker.git
-   cd bongocat-turbo-clicker
+   git clone https://github.com/your-username/bongocat-auto-clicker.git
+   cd bongocat-auto-clicker
    ```
 2. Run via launcher:
    - Double-click **`run.bat`** (launches windowed GUI with zero background console window).
