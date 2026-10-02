@@ -28,40 +28,49 @@ kernel32 = ctypes.windll.kernel32
 winmm = ctypes.windll.winmm
 
 KEYEVENTF_KEYUP = 0x0002
+VK_LBUTTON = 0x01
+VK_SPACE = 0x20
 VK_F8 = 0x77
 VK_F10 = 0x79
 
-# Virtual keys supported by BongoCat's BUTTONS array that produce no visible
-# characters in Windows text editors or browsers.
-F_KEYS = list(range(0x7C, 0x88))       # F13 - F24 (12 keys)
-NAV_KEYS = list(range(0x88, 0x90))     # Navigation keys (8 keys)
-GAMEPAD_KEYS = list(range(0xC3, 0xDB)) # Virtual Gamepad keys (24 keys)
-OEM_KEYS = [                           # Harmless OEM/Control virtual keys (14 keys)
-    0xEB, 0xEC, 0xED, 0xEE, 0xEF,
-    0xF6, 0xF7, 0xF8, 0xF9, 0xFA, 0xFB, 0xFC, 0xFD, 0xFE
+# --- VIRTUAL KEY MATRIX ---
+# Strictly filtered harmless keys supported by BongoCat's BUTTONS array.
+# Explicitly excluded:
+# - VK_NAVIGATION_* (0x88-0x8F): causes cursor/selection jumping in Windows Explorer.
+# - Gamepad buttons (0xC3-0xDA): triggers Windows Touch/On-Screen Keyboard when Win key is pressed.
+# - VK_PLAY (0xFA) & VK_ZOOM (0xFB): triggers Windows media/accessibility tools.
+
+SAFE_F_KEYS = list(range(0x7C, 0x88)) # F13 - F24 (12 keys)
+DORMANT_SYSTEM_KEYS = [                # Fujitsu & dormant ICO codes (6 keys)
+    0x93, 0x94, 0x95, 0x96, 0xE3, 0xE4
+]
+DORMANT_OEM_KEYS = [                   # Completely unassigned / non-interactive OEM codes (22 keys)
+    0xE6, 0xE7, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
+    0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFC,
+    0xFD, 0xFE
 ]
 
 PRESETS = {
     "overdrive": {
         "title": "Overdrive",
-        "badge": "58 keys",
-        "approx_cps": "~1,035 CPS",
-        "desc": "Uses full matrix of 58 harmless keys (F13-F24 + Gamepad + OEM). Maximum possible throughput for rapid item and level farming.",
-        "keys": F_KEYS + NAV_KEYS + GAMEPAD_KEYS + OEM_KEYS,
+        "badge": "40 keys",
+        "approx_cps": "~715 – 800 CPS",
+        "desc": "Full dormant key matrix (F13-F24 + Fujitsu + Clean OEM). Maximum clean throughput with zero Windows Explorer or Game Bar conflicts.",
+        "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS,
     },
     "turbo": {
         "title": "Turbo",
-        "badge": "28 keys",
-        "approx_cps": "~500 CPS",
-        "desc": "Uses 28 harmless keys (F13-F24 + Navigation + OEM). Balanced mode with lower virtual event frequency.",
-        "keys": F_KEYS + NAV_KEYS + OEM_KEYS[:8],
+        "badge": "24 keys",
+        "approx_cps": "~430 CPS",
+        "desc": "Balanced mode using 24 isolated virtual keys (F13-F24 + Select OEM). Moderate event frequency.",
+        "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS[:6],
     },
     "stealth": {
         "title": "Stealth",
         "badge": "12 keys",
         "approx_cps": "~215 CPS",
-        "desc": "Uses only 12 function keys (F13-F24). Ultra-low system footprint, minimal input generation.",
-        "keys": F_KEYS,
+        "desc": "Uses only standard F13-F24 function keys. Minimal event generation, ultra-light background farming.",
+        "keys": SAFE_F_KEYS,
     },
 }
 
@@ -85,10 +94,11 @@ def format_duration(seconds: float) -> str:
     return f"{mins:02d}:{secs:02d}"
 
 class ClickerEngine:
-    def __init__(self, preset_key="overdrive", delay_ms=28):
+    def __init__(self, preset_key="overdrive", delay_ms=28, smart_pause=True):
         self.preset_key = preset_key
         self.delay_ms = delay_ms
         self.delay_sec = delay_ms / 1000.0
+        self.smart_pause = smart_pause
         self.update_keys(preset_key)
 
         self.running = False
@@ -130,6 +140,20 @@ class ClickerEngine:
         cycle = 0
         while not self.shutdown_requested:
             if self.running:
+                # Smart Pause: If user is actively holding Left Mouse Button (e.g. YouTube 2x, drag)
+                # or holding Spacebar (YouTube 2x), yield input to prevent interrupting user actions.
+                if self.smart_pause:
+                    lmb_held = bool(user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
+                    space_held = bool(user32.GetAsyncKeyState(VK_SPACE) & 0x8000)
+                    if lmb_held or space_held:
+                        if self.paw_step != 0:
+                            release_keys(self.group_a)
+                            release_keys(self.group_b)
+                            self.paw_step = 0
+                        time.sleep(0.015)
+                        continue
+
+                # Alternating injection
                 if cycle % 2 == 0:
                     release_keys(self.group_b)
                     press_keys(self.group_a)
@@ -172,9 +196,8 @@ class BongoApp:
         self.root.configure(bg="#FFF9F5")
 
         winmm.timeBeginPeriod(1)
-        self.engine = ClickerEngine(preset_key="overdrive", delay_ms=28)
+        self.engine = ClickerEngine(preset_key="overdrive", delay_ms=28, smart_pause=True)
 
-        # Worker threads
         self.click_thread = threading.Thread(target=self.engine.run_loop, daemon=True)
         self.click_thread.start()
 
@@ -182,7 +205,6 @@ class BongoApp:
         self.hotkey_thread.start()
 
         self.show_settings = False
-        self.pulse_state = 0
         self.build_ui()
         self.update_loop()
 
@@ -194,7 +216,6 @@ class BongoApp:
         if HAS_PIL and os.path.exists(banner_path):
             try:
                 im = Image.open(banner_path)
-                # Crop away the Windows taskbar at bottom
                 im_crop = im.crop((0, 0, im.width, 292))
                 w = 520
                 h = int(im_crop.height * (w / im_crop.width))
@@ -207,7 +228,6 @@ class BongoApp:
                 banner_loaded = False
 
         if not banner_loaded:
-            # Fallback canvas banner
             self.lbl_banner = tk.Canvas(self.root, width=520, height=120, bg="#E77471", highlightthickness=0)
             self.lbl_banner.pack(fill=tk.X, side=tk.TOP)
             self.lbl_banner.create_text(260, 60, text="🐾 Bongo Cat Turbo Clicker 🐾", font=("Segoe UI", 20, "bold"), fill="#FFFFFF")
@@ -225,7 +245,7 @@ class BongoApp:
 
         self.status_text = tk.Label(
             status_bar,
-            text="READY - Press [F8] or button to start",
+            text="READY - Press [F8] to start farming",
             font=("Segoe UI", 9, "bold"),
             fg="#4A5568",
             bg="#FFF9F5",
@@ -234,7 +254,7 @@ class BongoApp:
 
         self.lbl_preset_tag = tk.Label(
             status_bar,
-            text="Overdrive (58 keys)",
+            text="Overdrive (40 keys)",
             font=("Segoe UI", 8, "bold"),
             fg="#E05D52",
             bg="#FFEBE8",
@@ -258,7 +278,7 @@ class BongoApp:
         self.card_time = self.create_stat_card(stats_frame, "⏱️ TIME ACTIVE", "00:00", "#805AD5")
         self.card_time.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
 
-        # 4. Big Primary Action Button
+        # 4. Primary Big Action Button
         self.btn_toggle = tk.Button(
             self.content,
             text="▶  START FARMING  (F8)",
@@ -307,7 +327,7 @@ class BongoApp:
         )
         self.chk_top.pack(side=tk.RIGHT)
 
-        # 6. Collapsible Settings Panel
+        # 6. Settings Panel
         self.build_settings_panel()
 
     def create_stat_card(self, parent, title, initial_val, color):
@@ -322,15 +342,15 @@ class BongoApp:
     def build_settings_panel(self):
         self.settings_frame = tk.Frame(self.content, bg="#FFFFFF", bd=1, relief=tk.SOLID)
 
-        # Title
+        # Header
         hdr = tk.Frame(self.settings_frame, bg="#F7FAFC", padx=12, pady=8)
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text="⚙️ SPEED PRESETS & CALIBRATION", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#F7FAFC").pack(side=tk.LEFT)
+        tk.Label(hdr, text="⚙️ SPEED PRESETS & BEHAVIOR", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#F7FAFC").pack(side=tk.LEFT)
 
         inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=14, pady=10)
         inner.pack(fill=tk.BOTH, expand=True)
 
-        # Presets Buttons Row
+        # Preset selection
         tk.Label(inner, text="Select Mode Preset:", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 6))
 
         presets_bar = tk.Frame(inner, bg="#FFFFFF")
@@ -367,21 +387,18 @@ class BongoApp:
 
         tk.Label(delay_row, text="Hold Delay (ms):", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
 
-        # Quick [-] button
         btn_minus = tk.Button(
             delay_row, text="−", font=("Segoe UI", 10, "bold"), width=2, bg="#EDF2F7", relief=tk.FLAT,
             command=lambda: self.adjust_delay(-1)
         )
         btn_minus.pack(side=tk.LEFT, padx=(10, 4))
 
-        # Direct Text Entry
         self.entry_delay = tk.Entry(delay_row, width=4, font=("Segoe UI", 10, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
         self.entry_delay.insert(0, str(self.engine.delay_ms))
         self.entry_delay.pack(side=tk.LEFT, padx=2)
         self.entry_delay.bind("<Return>", self.on_entry_delay_submit)
         self.entry_delay.bind("<FocusOut>", self.on_entry_delay_submit)
 
-        # Quick [+] button
         btn_plus = tk.Button(
             delay_row, text="+", font=("Segoe UI", 10, "bold"), width=2, bg="#EDF2F7", relief=tk.FLAT,
             command=lambda: self.adjust_delay(+1)
@@ -391,7 +408,6 @@ class BongoApp:
         self.lbl_sync_indicator = tk.Label(delay_row, text="28 ms (100% Sync)", font=("Segoe UI", 9, "bold"), fg="#38A169", bg="#FFFFFF")
         self.lbl_sync_indicator.pack(side=tk.RIGHT)
 
-        # Slider
         self.slider = tk.Scale(
             inner,
             from_=18,
@@ -403,14 +419,28 @@ class BongoApp:
             command=self.on_slider_change,
         )
         self.slider.set(self.engine.delay_ms)
-        self.slider.pack(fill=tk.X, pady=(0, 6))
+        self.slider.pack(fill=tk.X, pady=(0, 8))
+
+        # Smart Auto-Pause Toggle
+        self.smart_pause_var = tk.BooleanVar(value=True)
+        chk_pause = tk.Checkbutton(
+            inner,
+            text="⚡ Smart Auto-Pause: Yield when holding LMB or Space (fixes YouTube 2x)",
+            variable=self.smart_pause_var,
+            font=("Segoe UI", 8, "bold"),
+            fg="#2D3748",
+            bg="#FFFFFF",
+            activebackground="#FFFFFF",
+            command=self.on_smart_pause_toggle,
+        )
+        chk_pause.pack(anchor=tk.W, pady=(0, 8))
 
         # Explanatory Technical Note
         note_frame = tk.Frame(inner, bg="#FEFCBF", bd=1, relief=tk.SOLID, padx=8, pady=6)
         note_frame.pack(fill=tk.X)
         lbl_note = tk.Label(
             note_frame,
-            text="💡 Why 28 ms? BongoCat samples keys every 16 ms. At 28 ms, every press and release is guaranteed to be detected (100% sync, ~1,035 CPS). Lowering to 20 ms drops ~40% of clicks due to game timer aliasing.",
+            text="💡 Sync Guarantee: BongoCat samples keys every 16 ms. A 28 ms delay guarantees 100% click registration without dropped inputs. Keys are strictly isolated so they never interfere with Windows Explorer, Touch Keyboard, or gaming.",
             font=("Segoe UI", 8),
             fg="#744210",
             bg="#FEFCBF",
@@ -462,6 +492,9 @@ class BongoApp:
         self.entry_delay.insert(0, str(new_val))
         self.update_sync_label(new_val)
 
+    def on_smart_pause_toggle(self):
+        self.engine.smart_pause = self.smart_pause_var.get()
+
     def update_sync_label(self, ms):
         if ms in range(26, 32):
             self.lbl_sync_indicator.configure(text=f"{ms} ms (100% Sync)", fg="#38A169")
@@ -474,7 +507,7 @@ class BongoApp:
         self.show_settings = not self.show_settings
         if self.show_settings:
             self.settings_frame.pack(fill=tk.X, pady=(10, 0))
-            self.root.geometry("520x840")
+            self.root.geometry("520x860")
             self.btn_settings.configure(text="▲  Close Settings", bg="#CBD5E0")
         else:
             self.settings_frame.pack_forget()
@@ -534,7 +567,7 @@ def run_cli():
         kernel32.SetConsoleMode(handle, mode.value | 0x0004)
 
     winmm.timeBeginPeriod(1)
-    engine = ClickerEngine(preset_key="overdrive", delay_ms=28)
+    engine = ClickerEngine(preset_key="overdrive", delay_ms=28, smart_pause=True)
 
     click_thread = threading.Thread(target=engine.run_loop, daemon=True)
     click_thread.start()
