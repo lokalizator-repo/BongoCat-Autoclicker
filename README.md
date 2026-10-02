@@ -117,11 +117,11 @@ By hosting this Named Pipe server, our engine delivers batch taps **directly int
 
 | Preset | Batch Size | Frequency | Delivered Throughput | Notes |
 | :--- | :---: | :---: | :---: | :--- |
-| **🌌 God Mode** | 10,000 taps | 90 ms | **~111,111 CPS** | Millions of clicks in seconds. Zero dropped inputs. |
+| **💥 Infinity** | 1,000,000 taps | 90 ms | **~11,111,111 CPS** | 11.1 Million CPS. Adds 100M clicks in ~9 seconds! |
+| **🌌 God Mode** | 10,000 taps | 90 ms | **~111,111 CPS** | Millions of clicks in seconds. Ultra-clean acceleration. |
 | **⚡ Hyper** | 1,000 taps | 90 ms | **~11,111 CPS** | Extreme acceleration for instant progression. |
 | **🚀 Overdrive** | 100 taps | 90 ms | **~1,111 CPS** | High throughput. Standard fast farming. |
-| **💨 Turbo** | 50 taps | 90 ms | **~555 CPS** | Balanced high-speed direct injection. |
-| **🎛️ Custom** | 1–1,000,000 taps | 90 ms | **Up to Millions CPS** | Set via direct numerical entry, Quick Jump buttons, or slider. |
+| **🎛️ Custom** | 1–100,000,000 taps | 90 ms | **Up to 1.1B CPS** | Configurable via direct number entry, Quick Jump, or slider. |
 
 $$\text{Throughput (CPS)} = \frac{\text{Taps per Tick}}{0.090\text{ s}}$$
 

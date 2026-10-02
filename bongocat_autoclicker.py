@@ -37,29 +37,29 @@ PIPE_WAIT = 0x00000000
 INVALID_HANDLE_VALUE = -1
 
 PRESETS = {
-    "turbo": {
-        "title": "Turbo",
-        "badge": "555 CPS",
-        "taps_per_tick": 50,
-        "desc": "Balanced direct injection (50 taps / 90ms). Smooth progression with minimal resource footprint.",
-    },
     "overdrive": {
         "title": "Overdrive",
         "badge": "1.1k CPS",
         "taps_per_tick": 100,
-        "desc": "High-speed direct memory injection (100 taps / 90ms). Fast farming with 100% click delivery.",
+        "desc": "Standard direct injection (100 taps / 90ms). Fast and steady.",
     },
     "hyper": {
         "title": "Hyper",
         "badge": "11.1k CPS",
         "taps_per_tick": 1000,
-        "desc": "Extreme memory packet injection (1,000 taps / 90ms). Over 11,000 clicks per second directly into game state.",
+        "desc": "Extreme memory packet injection (1,000 taps / 90ms = ~11,111 CPS).",
     },
     "godmode": {
         "title": "God Mode",
         "badge": "111k CPS",
         "taps_per_tick": 10000,
-        "desc": "Cosmic injection (10,000 taps / 90ms). Delivers ~111,000 CPS for instant millions of clicks in seconds.",
+        "desc": "Cosmic injection (10,000 taps / 90ms = ~111,111 CPS).",
+    },
+    "infinity": {
+        "title": "Infinity",
+        "badge": "11.1M CPS",
+        "taps_per_tick": 1000000,
+        "desc": "MAXIMUM OVERKILL: 1,000,000 clicks per batch (90ms) = ~11.1 Million CPS! Tens of millions of clicks in seconds.",
     },
 }
 
@@ -161,7 +161,7 @@ class ClickerEngine:
         self.taps_per_tick = PRESETS.get(preset_key, PRESETS["overdrive"])["taps_per_tick"]
 
     def set_custom_taps(self, taps: int):
-        self.taps_per_tick = max(1, min(1_000_000, int(taps)))
+        self.taps_per_tick = max(1, min(100_000_000, int(taps)))
 
     def toggle(self):
         now = time.perf_counter()
@@ -391,7 +391,7 @@ class BongoApp:
         presets_bar.pack(fill=tk.X, pady=(0, 8))
 
         self.preset_buttons = {}
-        for key in ["turbo", "overdrive", "hyper", "godmode"]:
+        for key in ["overdrive", "hyper", "godmode", "infinity"]:
             cfg = PRESETS[key]
             btn = tk.Button(
                 presets_bar,
@@ -419,47 +419,52 @@ class BongoApp:
         taps_row = tk.Frame(inner, bg="#FFFFFF")
         taps_row.pack(fill=tk.X, pady=(0, 4))
 
-        tk.Label(taps_row, text="Clicks Per Batch (every 90ms):", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
+        tk.Label(taps_row, text="Clicks Per Batch (every 90ms):", font=("Segoe UI", 8, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
+
+        btn_m10k = tk.Button(
+            taps_row, text="−10k", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_taps(-10000)
+        )
+        btn_m10k.pack(side=tk.LEFT, padx=(4, 1))
 
         btn_m100 = tk.Button(
-            taps_row, text="−100", font=("Segoe UI", 8, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
+            taps_row, text="−100", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
             command=lambda: self.adjust_taps(-100)
         )
-        btn_m100.pack(side=tk.LEFT, padx=(6, 2))
+        btn_m100.pack(side=tk.LEFT, padx=(1, 3))
 
-        btn_m10 = tk.Button(
-            taps_row, text="−10", font=("Segoe UI", 8, "bold"), width=3, bg="#EDF2F7", relief=tk.FLAT,
-            command=lambda: self.adjust_taps(-10)
-        )
-        btn_m10.pack(side=tk.LEFT, padx=(2, 4))
-
-        self.entry_taps = tk.Entry(taps_row, width=8, font=("Segoe UI", 10, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
+        self.entry_taps = tk.Entry(taps_row, width=9, font=("Segoe UI", 9, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
         self.entry_taps.insert(0, str(self.engine.taps_per_tick))
         self.entry_taps.pack(side=tk.LEFT, padx=2)
         self.entry_taps.bind("<Return>", self.on_entry_taps_submit)
         self.entry_taps.bind("<FocusOut>", self.on_entry_taps_submit)
 
-        btn_p10 = tk.Button(
-            taps_row, text="+10", font=("Segoe UI", 8, "bold"), width=3, bg="#EDF2F7", relief=tk.FLAT,
-            command=lambda: self.adjust_taps(+10)
-        )
-        btn_p10.pack(side=tk.LEFT, padx=(4, 2))
-
         btn_p100 = tk.Button(
-            taps_row, text="+100", font=("Segoe UI", 8, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
+            taps_row, text="+100", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
             command=lambda: self.adjust_taps(+100)
         )
-        btn_p100.pack(side=tk.LEFT, padx=(2, 6))
+        btn_p100.pack(side=tk.LEFT, padx=(3, 1))
 
-        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 9, "bold"), fg="#38A169", bg="#FFFFFF")
+        btn_p10k = tk.Button(
+            taps_row, text="+10k", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_taps(+10000)
+        )
+        btn_p10k.pack(side=tk.LEFT, padx=(1, 4))
+
+        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 8, "bold"), fg="#38A169", bg="#FFFFFF")
         self.lbl_calculated_cps.pack(side=tk.RIGHT)
 
         # Quick Jump Row
         quick_row = tk.Frame(inner, bg="#FFFFFF")
         quick_row.pack(fill=tk.X, pady=(2, 6))
         tk.Label(quick_row, text="Quick Jump:", font=("Segoe UI", 8, "bold"), fg="#718096", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 4))
-        for q_val in [50, 100, 500, 1000, 2500, 5000, 10000]:
-            q_txt = f"{q_val // 1000}k" if q_val >= 1000 else str(q_val)
+        for q_val in [100, 1000, 10000, 100000, 500000, 1000000]:
+            if q_val >= 1_000_000:
+                q_txt = f"{q_val // 1_000_000}M"
+            elif q_val >= 1000:
+                q_txt = f"{q_val // 1000}k"
+            else:
+                q_txt = str(q_val)
             q_btn = tk.Button(
                 quick_row,
                 text=q_txt,
@@ -477,7 +482,7 @@ class BongoApp:
         self.slider = tk.Scale(
             inner,
             from_=10,
-            to=2500,
+            to=10000,
             orient=tk.HORIZONTAL,
             showvalue=False,
             bg="#FFFFFF",
@@ -509,9 +514,9 @@ class BongoApp:
         self.set_batch_value(val)
 
     def set_batch_value(self, val: int):
-        val = max(1, min(1_000_000, int(val)))
+        val = max(1, min(100_000_000, int(val)))
         if val > self.slider.cget("to"):
-            self.slider.configure(to=max(10000, val))
+            self.slider.configure(to=max(1_000_000, val))
         self.slider.set(val)
         self.engine.set_custom_taps(val)
         self.entry_taps.delete(0, tk.END)
@@ -529,13 +534,20 @@ class BongoApp:
 
         cfg = PRESETS.get(cur, PRESETS["overdrive"])
         cps = int(self.engine.taps_per_tick / 0.090)
-        self.lbl_desc_speed.configure(text=f"Direct IPC Throughput: ~{cps:,} CPS")
+        if cps >= 1_000_000:
+            cps_str = f"~{cps / 1_000_000:.2f}M CPS"
+        elif cps >= 10_000:
+            cps_str = f"~{cps / 1_000:.1f}k CPS"
+        else:
+            cps_str = f"~{cps:,} CPS"
+
+        self.lbl_desc_speed.configure(text=f"Direct IPC Throughput: {cps_str}")
         if cur in PRESETS and PRESETS[cur]["taps_per_tick"] == cur_taps:
             self.lbl_desc_body.configure(text=cfg["desc"])
         else:
             self.lbl_desc_body.configure(text=f"Custom high-speed injection ({cur_taps:,} clicks / 90ms). Zero Windows interference, 100% click registration.")
-        self.lbl_calculated_cps.configure(text=f"≈ {cps:,} CPS")
-        self.lbl_preset_tag.configure(text=f"Direct IPC (~{cps:,} CPS)")
+        self.lbl_calculated_cps.configure(text=f"≈ {cps_str}")
+        self.lbl_preset_tag.configure(text=f"Direct IPC ({cps_str})")
 
     def on_slider_change(self, val):
         taps = int(val)
@@ -545,9 +557,9 @@ class BongoApp:
         self.update_preset_buttons_ui()
 
     def on_entry_taps_submit(self, event=None):
-        raw = self.entry_taps.get().strip().replace(",", "").replace(" ", "")
+        raw = self.entry_taps.get().strip().replace(",", "").replace(" ", "").replace("_", "")
         if raw.isdigit():
-            val = max(1, min(1_000_000, int(raw)))
+            val = max(1, min(100_000_000, int(raw)))
             self.set_batch_value(val)
 
     def adjust_taps(self, delta):
@@ -597,8 +609,23 @@ class BongoApp:
                 self.status_text.configure(text="WAITING - Launch BongoCat to connect", fg="#C05621")
 
         # Update Stats Cards
-        self.card_clicks.val_label.configure(text=f"{self.engine.total_clicks:,}")
-        self.card_cps.val_label.configure(text=f"{int(actual_cps):,} CPS" if self.engine.running else "0 CPS")
+        clicks_str = f"{self.engine.total_clicks:,}"
+        if len(clicks_str) > 13:
+            self.card_clicks.val_label.configure(font=("Segoe UI", 10, "bold"), text=clicks_str)
+        elif len(clicks_str) > 9:
+            self.card_clicks.val_label.configure(font=("Segoe UI", 12, "bold"), text=clicks_str)
+        else:
+            self.card_clicks.val_label.configure(font=("Segoe UI", 14, "bold"), text=clicks_str)
+
+        if not self.engine.running:
+            self.card_cps.val_label.configure(text="0 CPS")
+        elif actual_cps >= 1_000_000:
+            self.card_cps.val_label.configure(text=f"{actual_cps / 1_000_000:.2f}M CPS")
+        elif actual_cps >= 10_000:
+            self.card_cps.val_label.configure(text=f"{actual_cps / 1_000:.1f}k CPS")
+        else:
+            self.card_cps.val_label.configure(text=f"{int(actual_cps):,} CPS")
+
         self.card_time.val_label.configure(text=format_duration(active_time))
 
         self.root.after(35, self.update_loop)
