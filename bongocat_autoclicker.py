@@ -8,6 +8,21 @@ import time
 import tkinter as tk
 from tkinter import ttk
 
+# Enable Per-Monitor High-DPI awareness on Windows to prevent blurry rendering
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+try:
+    from PIL import Image, ImageTk
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 winmm = ctypes.windll.winmm
@@ -28,15 +43,24 @@ OEM_KEYS = [                           # Harmless OEM/Control virtual keys (14 k
 
 PRESETS = {
     "overdrive": {
-        "name": "Overdrive (58 keys)",
+        "title": "Overdrive",
+        "badge": "58 keys",
+        "approx_cps": "~1,035 CPS",
+        "desc": "Uses full matrix of 58 harmless keys (F13-F24 + Gamepad + OEM). Maximum possible throughput for rapid item and level farming.",
         "keys": F_KEYS + NAV_KEYS + GAMEPAD_KEYS + OEM_KEYS,
     },
     "turbo": {
-        "name": "Turbo (28 keys)",
+        "title": "Turbo",
+        "badge": "28 keys",
+        "approx_cps": "~500 CPS",
+        "desc": "Uses 28 harmless keys (F13-F24 + Navigation + OEM). Balanced mode with lower virtual event frequency.",
         "keys": F_KEYS + NAV_KEYS + OEM_KEYS[:8],
     },
     "stealth": {
-        "name": "Stealth (12 keys)",
+        "title": "Stealth",
+        "badge": "12 keys",
+        "approx_cps": "~215 CPS",
+        "desc": "Uses only 12 function keys (F13-F24). Ultra-low system footprint, minimal input generation.",
         "keys": F_KEYS,
     },
 }
@@ -63,6 +87,7 @@ def format_duration(seconds: float) -> str:
 class ClickerEngine:
     def __init__(self, preset_key="overdrive", delay_ms=28):
         self.preset_key = preset_key
+        self.delay_ms = delay_ms
         self.delay_sec = delay_ms / 1000.0
         self.update_keys(preset_key)
 
@@ -80,7 +105,8 @@ class ClickerEngine:
         self.step_clicks = len(self.group_a)
 
     def set_delay_ms(self, delay_ms):
-        self.delay_sec = max(0.018, min(0.050, delay_ms / 1000.0))
+        self.delay_ms = max(16, min(50, int(delay_ms)))
+        self.delay_sec = self.delay_ms / 1000.0
 
     def toggle(self):
         now = time.perf_counter()
@@ -104,7 +130,6 @@ class ClickerEngine:
         cycle = 0
         while not self.shutdown_requested:
             if self.running:
-                # Alternate key groups
                 if cycle % 2 == 0:
                     release_keys(self.group_b)
                     press_keys(self.group_a)
@@ -138,123 +163,18 @@ def hotkey_listener(engine: ClickerEngine):
 
         time.sleep(0.005)
 
-class BongoCanvas(tk.Canvas):
-    def __init__(self, master, width=480, height=200, **kwargs):
-        super().__init__(master, width=width, height=height, highlightthickness=0, **kwargs)
-        self.w = width
-        self.h = height
-        self.paw_state = 0
-        self.build_scene()
-
-    def build_scene(self):
-        # Warm sunset pastel gradient: Coral -> Peach -> Cream
-        r1, g1, b1 = 233, 118, 114
-        r2, g2, b2 = 244, 160, 134
-        r3, g3, b3 = 252, 226, 204
-
-        steps = 50
-        for i in range(steps):
-            t = i / steps
-            if t < 0.5:
-                st = t * 2
-                r = int(r1 + (r2 - r1) * st)
-                g = int(g1 + (r2 - g1) * st)
-                b = int(b1 + (r2 - b1) * st)
-            else:
-                st = (t - 0.5) * 2
-                r = int(r2 + (r3 - r2) * st)
-                g = int(g2 + (r3 - g2) * st)
-                b = int(b2 + (r3 - b2) * st)
-
-            y1 = int(i * (self.h / steps))
-            y2 = int((i + 1) * (self.h / steps))
-            c = f"#{r:02x}{g:02x}{b:02x}"
-            self.create_rectangle(0, y1, self.w, y2, fill=c, outline=c)
-
-        # "Bongo Cat" Logo lettering with 3D drop-shadow
-        self.create_text(138, 48, text="Bongo Cat", font=("Arial Rounded MT Bold", 32, "bold"), fill="#3E2723")
-        self.create_text(136, 46, text="Bongo Cat", font=("Arial Rounded MT Bold", 32, "bold"), fill="#5D4037")
-        self.create_text(135, 44, text="Bongo Cat", font=("Arial Rounded MT Bold", 32, "bold"), fill="#BFE3F7")
-
-        # Pill badge
-        self.create_oval(60, 68, 76, 84, fill="#FFFFFF", outline="")
-        self.create_oval(194, 68, 210, 84, fill="#FFFFFF", outline="")
-        self.create_rectangle(68, 68, 202, 84, fill="#FFFFFF", outline="")
-        self.create_text(135, 76, text="TURBO CLICKER", font=("Arial Rounded MT Bold", 8, "bold"), fill="#E06A66")
-
-        # Cat positioning
-        cx, cy = 345, 130
-
-        # Ears
-        self.create_polygon(cx - 58, cy - 20, cx - 40, cy - 72, cx - 12, cy - 38, fill="#FFFFFF", outline="#3E2723", width=3)
-        self.create_polygon(cx - 51, cy - 26, cx - 39, cy - 64, cx - 18, cy - 39, fill="#FFAAA6")
-
-        self.create_polygon(cx + 58, cy - 20, cx + 40, cy - 72, cx + 12, cy - 38, fill="#FFFFFF", outline="#3E2723", width=3)
-        self.create_polygon(cx + 51, cy - 26, cx + 39, cy - 64, cx + 18, cy - 39, fill="#FFAAA6")
-
-        # Head / Body
-        self.create_oval(cx - 68, cy - 40, cx + 68, cy + 50, fill="#FFFFFF", outline="#3E2723", width=3)
-
-        # Cheeks (blush)
-        self.create_oval(cx - 48, cy + 8, cx - 32, cy + 20, fill="#FFB7B4", outline="")
-        self.create_oval(cx + 32, cy + 8, cx + 48, cy + 20, fill="#FFB7B4", outline="")
-
-        # Eyes • •
-        self.create_oval(cx - 34, cy - 6, cx - 24, cy + 6, fill="#3E2723", outline="")
-        self.create_oval(cx + 24, cy - 6, cx + 34, cy + 6, fill="#3E2723", outline="")
-
-        # Mouth ω
-        self.create_arc(cx - 14, cy + 4, cx, cy + 18, start=180, extent=180, style=tk.ARC, outline="#3E2723", width=3)
-        self.create_arc(cx, cy + 4, cx + 14, cy + 18, start=180, extent=180, style=tk.ARC, outline="#3E2723", width=3)
-
-        # Desk shelf surface
-        self.create_rectangle(0, 168, self.w, self.h, fill="#D9E2EC", outline="#BAC7D5", width=2)
-
-        # Paw base positions
-        self.cx = cx
-        self.base_l_y = 164
-        self.base_r_y = 164
-        self.draw_left_paw(cx, self.base_l_y)
-        self.draw_right_paw(cx, self.base_r_y)
-
-    def draw_left_paw(self, cx, y):
-        self.delete("paw_l")
-        self.create_oval(cx - 78, y - 18, cx - 40, y + 14, fill="#FFFFFF", outline="#3E2723", width=3, tags="paw_l")
-        self.create_oval(cx - 66, y - 10, cx - 52, y + 2, fill="#FFAAA6", outline="", tags="paw_l")
-        self.create_oval(cx - 73, y - 16, cx - 65, y - 8, fill="#FFAAA6", outline="", tags="paw_l")
-        self.create_oval(cx - 63, y - 18, cx - 55, y - 10, fill="#FFAAA6", outline="", tags="paw_l")
-        self.create_oval(cx - 53, y - 16, cx - 45, y - 8, fill="#FFAAA6", outline="", tags="paw_l")
-
-    def draw_right_paw(self, cx, y):
-        self.delete("paw_r")
-        self.create_oval(cx + 40, y - 18, cx + 78, y + 14, fill="#FFFFFF", outline="#3E2723", width=3, tags="paw_r")
-        self.create_oval(cx + 52, y - 10, cx + 66, y + 2, fill="#FFAAA6", outline="", tags="paw_r")
-        self.create_oval(cx + 45, y - 16, cx + 53, y - 8, fill="#FFAAA6", outline="", tags="paw_r")
-        self.create_oval(cx + 55, y - 18, cx + 63, y - 10, fill="#FFAAA6", outline="", tags="paw_r")
-        self.create_oval(cx + 65, y - 16, cx + 73, y - 8, fill="#FFAAA6", outline="", tags="paw_r")
-
-    def update_paws(self, paw_state):
-        if self.paw_state == paw_state:
-            return
-        self.paw_state = paw_state
-
-        ly = self.base_l_y - (18 if paw_state == 1 else 0)
-        ry = self.base_r_y - (18 if paw_state == 2 else 0)
-        self.draw_left_paw(self.cx, ly)
-        self.draw_right_paw(self.cx, ry)
-
 class BongoApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Bongo Cat Turbo Clicker")
-        self.root.geometry("480x470")
+        self.root.geometry("520x540")
         self.root.resizable(False, False)
-        self.root.configure(bg="#F6EFEA")
+        self.root.configure(bg="#FFF9F5")
 
         winmm.timeBeginPeriod(1)
         self.engine = ClickerEngine(preset_key="overdrive", delay_ms=28)
 
-        # Start worker and hotkey threads
+        # Worker threads
         self.click_thread = threading.Thread(target=self.engine.run_loop, daemon=True)
         self.click_thread.start()
 
@@ -262,162 +182,304 @@ class BongoApp:
         self.hotkey_thread.start()
 
         self.show_settings = False
+        self.pulse_state = 0
         self.build_ui()
         self.update_loop()
 
     def build_ui(self):
-        # 1. Mascot Canvas
-        self.canvas = BongoCanvas(self.root, width=480, height=200)
-        self.canvas.pack(fill=tk.X, side=tk.TOP)
+        # 1. Authentic Header Banner
+        banner_loaded = False
+        banner_path = os.path.join(os.path.dirname(__file__), "assets", "banner.png")
 
-        # Main content container
-        content = tk.Frame(self.root, bg="#F6EFEA")
-        content.pack(fill=tk.BOTH, expand=True, padx=18, pady=10)
+        if HAS_PIL and os.path.exists(banner_path):
+            try:
+                im = Image.open(banner_path)
+                # Crop away the Windows taskbar at bottom
+                im_crop = im.crop((0, 0, im.width, 292))
+                w = 520
+                h = int(im_crop.height * (w / im_crop.width))
+                im_res = im_crop.resize((w, h), Image.Resampling.LANCZOS)
+                self.banner_photo = ImageTk.PhotoImage(im_res)
+                self.lbl_banner = tk.Label(self.root, image=self.banner_photo, bd=0, highlightthickness=0)
+                self.lbl_banner.pack(fill=tk.X, side=tk.TOP)
+                banner_loaded = True
+            except Exception:
+                banner_loaded = False
 
-        # 2. Stat Cards Row
-        stats_frame = tk.Frame(content, bg="#F6EFEA")
-        stats_frame.pack(fill=tk.X, pady=(0, 10))
+        if not banner_loaded:
+            # Fallback canvas banner
+            self.lbl_banner = tk.Canvas(self.root, width=520, height=120, bg="#E77471", highlightthickness=0)
+            self.lbl_banner.pack(fill=tk.X, side=tk.TOP)
+            self.lbl_banner.create_text(260, 60, text="🐾 Bongo Cat Turbo Clicker 🐾", font=("Segoe UI", 20, "bold"), fill="#FFFFFF")
 
-        # Card 1: Clicks
-        self.card_clicks = self.create_stat_card(stats_frame, "🐾 CLICKS", "0", "#E87A6E")
+        # 2. Main Content
+        self.content = tk.Frame(self.root, bg="#FFF9F5")
+        self.content.pack(fill=tk.BOTH, expand=True, padx=20, pady=(12, 16))
+
+        # Status Badge Row
+        status_bar = tk.Frame(self.content, bg="#FFF9F5")
+        status_bar.pack(fill=tk.X, pady=(0, 10))
+
+        self.status_dot = tk.Label(status_bar, text="●", font=("Segoe UI", 12), fg="#A0AEC0", bg="#FFF9F5")
+        self.status_dot.pack(side=tk.LEFT, padx=(0, 6))
+
+        self.status_text = tk.Label(
+            status_bar,
+            text="READY - Press [F8] or button to start",
+            font=("Segoe UI", 9, "bold"),
+            fg="#4A5568",
+            bg="#FFF9F5",
+        )
+        self.status_text.pack(side=tk.LEFT)
+
+        self.lbl_preset_tag = tk.Label(
+            status_bar,
+            text="Overdrive (58 keys)",
+            font=("Segoe UI", 8, "bold"),
+            fg="#E05D52",
+            bg="#FFEBE8",
+            padx=8,
+            pady=2,
+            bd=1,
+            relief=tk.SOLID,
+        )
+        self.lbl_preset_tag.pack(side=tk.RIGHT)
+
+        # 3. Stat Cards Row
+        stats_frame = tk.Frame(self.content, bg="#FFF9F5")
+        stats_frame.pack(fill=tk.X, pady=(0, 12))
+
+        self.card_clicks = self.create_stat_card(stats_frame, "🐾 TOTAL CLICKS", "0", "#E05D52")
         self.card_clicks.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
 
-        # Card 2: CPS
-        self.card_cps = self.create_stat_card(stats_frame, "⚡ SPEED", "0 CPS", "#4A89DC")
+        self.card_cps = self.create_stat_card(stats_frame, "⚡ CURRENT CPS", "0 CPS", "#3182CE")
         self.card_cps.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=3)
 
-        # Card 3: Time
-        self.card_time = self.create_stat_card(stats_frame, "⏱️ TIME", "00:00", "#7E6DB0")
+        self.card_time = self.create_stat_card(stats_frame, "⏱️ TIME ACTIVE", "00:00", "#805AD5")
         self.card_time.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
 
-        # 3. Big Action Button
+        # 4. Big Primary Action Button
         self.btn_toggle = tk.Button(
-            content,
-            text="▶ START FARMING (F8)",
-            font=("Arial Rounded MT Bold", 13, "bold"),
-            bg="#FF766D",
+            self.content,
+            text="▶  START FARMING  (F8)",
+            font=("Segoe UI", 12, "bold"),
+            bg="#FF6B6B",
             fg="#FFFFFF",
-            activebackground="#E5635B",
+            activebackground="#FA5252",
             activeforeground="#FFFFFF",
             relief=tk.FLAT,
             cursor="hand2",
-            pady=10,
+            pady=11,
             command=self.engine.toggle,
         )
-        self.btn_toggle.pack(fill=tk.X, pady=(0, 8))
+        self.btn_toggle.pack(fill=tk.X, pady=(0, 10))
 
-        # 4. Secondary Row: Settings Toggle & Always on Top
-        bar = tk.Frame(content, bg="#F6EFEA")
-        bar.pack(fill=tk.X)
+        # 5. Quick Controls Row
+        ctrl_bar = tk.Frame(self.content, bg="#FFF9F5")
+        ctrl_bar.pack(fill=tk.X)
 
         self.btn_settings = tk.Button(
-            bar,
-            text="⚙️ Settings",
+            ctrl_bar,
+            text="⚙️  Speed & Settings",
             font=("Segoe UI", 9, "bold"),
-            bg="#E2DCD5",
-            fg="#4A4540",
+            bg="#EDF2F7",
+            fg="#2D3748",
+            activebackground="#E2E8F0",
+            activeforeground="#1A202C",
             relief=tk.FLAT,
             cursor="hand2",
-            padx=10,
-            pady=4,
+            padx=12,
+            pady=5,
             command=self.toggle_settings_panel,
         )
         self.btn_settings.pack(side=tk.LEFT)
 
         self.top_var = tk.BooleanVar(value=False)
         self.chk_top = tk.Checkbutton(
-            bar,
+            ctrl_bar,
             text="📌 Always on Top",
             variable=self.top_var,
-            font=("Segoe UI", 9),
-            bg="#F6EFEA",
-            fg="#504B46",
-            activebackground="#F6EFEA",
+            font=("Segoe UI", 9, "bold"),
+            fg="#4A5568",
+            bg="#FFF9F5",
+            activebackground="#FFF9F5",
             command=self.update_always_on_top,
         )
         self.chk_top.pack(side=tk.RIGHT)
 
-        # 5. Collapsible Settings Panel
-        self.settings_frame = tk.Frame(content, bg="#EDE6E0", bd=1, relief=tk.SOLID)
-
-        # Delay calibration slider
-        lbl_delay = tk.Label(
-            self.settings_frame,
-            text="Input Hold Delay (Sync with BongoCat 16ms timer):",
-            font=("Segoe UI", 8, "bold"),
-            bg="#EDE6E0",
-            fg="#3E3834",
-        )
-        lbl_delay.pack(anchor=tk.W, padx=10, pady=(6, 0))
-
-        slider_row = tk.Frame(self.settings_frame, bg="#EDE6E0")
-        slider_row.pack(fill=tk.X, padx=10, pady=(2, 6))
-
-        self.slider_val = tk.IntVar(value=28)
-        self.slider = tk.Scale(
-            slider_row,
-            from_=18,
-            to=40,
-            orient=tk.HORIZONTAL,
-            variable=self.slider_val,
-            bg="#EDE6E0",
-            highlightthickness=0,
-            command=self.on_delay_change,
-        )
-        self.slider.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        self.lbl_delay_val = tk.Label(slider_row, text="28 ms (100% Sync)", font=("Segoe UI", 8, "bold"), bg="#EDE6E0", fg="#E87A6E")
-        self.lbl_delay_val.pack(side=tk.RIGHT, padx=6)
-
-        # Mode Selection
-        lbl_mode = tk.Label(self.settings_frame, text="Speed Preset:", font=("Segoe UI", 8, "bold"), bg="#EDE6E0", fg="#3E3834")
-        lbl_mode.pack(anchor=tk.W, padx=10, pady=(2, 0))
-
-        modes_row = tk.Frame(self.settings_frame, bg="#EDE6E0")
-        modes_row.pack(fill=tk.X, padx=10, pady=(0, 6))
-
-        self.mode_var = tk.StringVar(value="overdrive")
-        for key, title in [("overdrive", "Overdrive (58 keys)"), ("turbo", "Turbo (28 keys)"), ("stealth", "Stealth (12 keys)")]:
-            rb = tk.Radiobutton(
-                modes_row,
-                text=title,
-                value=key,
-                variable=self.mode_var,
-                font=("Segoe UI", 8),
-                bg="#EDE6E0",
-                command=self.on_mode_change,
-            )
-            rb.pack(side=tk.LEFT, padx=(0, 6))
+        # 6. Collapsible Settings Panel
+        self.build_settings_panel()
 
     def create_stat_card(self, parent, title, initial_val, color):
         frame = tk.Frame(parent, bg="#FFFFFF", bd=1, relief=tk.SOLID)
         lbl_title = tk.Label(frame, text=title, font=("Segoe UI", 8, "bold"), fg=color, bg="#FFFFFF")
-        lbl_title.pack(anchor=tk.CENTER, pady=(6, 0))
-        lbl_val = tk.Label(frame, text=initial_val, font=("Arial Rounded MT Bold", 13, "bold"), fg="#2E2824", bg="#FFFFFF")
-        lbl_val.pack(anchor=tk.CENTER, pady=(0, 6))
+        lbl_title.pack(anchor=tk.CENTER, pady=(8, 0))
+        lbl_val = tk.Label(frame, text=initial_val, font=("Segoe UI", 14, "bold"), fg="#1A202C", bg="#FFFFFF")
+        lbl_val.pack(anchor=tk.CENTER, pady=(0, 8))
         frame.val_label = lbl_val
         return frame
+
+    def build_settings_panel(self):
+        self.settings_frame = tk.Frame(self.content, bg="#FFFFFF", bd=1, relief=tk.SOLID)
+
+        # Title
+        hdr = tk.Frame(self.settings_frame, bg="#F7FAFC", padx=12, pady=8)
+        hdr.pack(fill=tk.X)
+        tk.Label(hdr, text="⚙️ SPEED PRESETS & CALIBRATION", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#F7FAFC").pack(side=tk.LEFT)
+
+        inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=14, pady=10)
+        inner.pack(fill=tk.BOTH, expand=True)
+
+        # Presets Buttons Row
+        tk.Label(inner, text="Select Mode Preset:", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 6))
+
+        presets_bar = tk.Frame(inner, bg="#FFFFFF")
+        presets_bar.pack(fill=tk.X, pady=(0, 8))
+
+        self.preset_buttons = {}
+        for key in ["overdrive", "turbo", "stealth"]:
+            cfg = PRESETS[key]
+            btn = tk.Button(
+                presets_bar,
+                text=f"{cfg['title']} ({cfg['badge']})",
+                font=("Segoe UI", 9, "bold"),
+                relief=tk.FLAT,
+                cursor="hand2",
+                pady=6,
+                command=lambda k=key: self.select_preset(k),
+            )
+            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
+            self.preset_buttons[key] = btn
+
+        # Dynamic Description Card
+        self.card_desc = tk.Frame(inner, bg="#F8FAFC", bd=1, relief=tk.SOLID, padx=10, pady=8)
+        self.card_desc.pack(fill=tk.X, pady=(0, 10))
+
+        self.lbl_desc_speed = tk.Label(self.card_desc, text="", font=("Segoe UI", 9, "bold"), fg="#3182CE", bg="#F8FAFC")
+        self.lbl_desc_speed.pack(anchor=tk.W)
+
+        self.lbl_desc_body = tk.Label(self.card_desc, text="", font=("Segoe UI", 8), fg="#4A5568", bg="#F8FAFC", wraplength=440, justify=tk.LEFT)
+        self.lbl_desc_body.pack(anchor=tk.W, pady=(2, 0))
+
+        # Direct Delay / Speed Input & Slider
+        delay_row = tk.Frame(inner, bg="#FFFFFF")
+        delay_row.pack(fill=tk.X, pady=(0, 4))
+
+        tk.Label(delay_row, text="Hold Delay (ms):", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
+
+        # Quick [-] button
+        btn_minus = tk.Button(
+            delay_row, text="−", font=("Segoe UI", 10, "bold"), width=2, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_delay(-1)
+        )
+        btn_minus.pack(side=tk.LEFT, padx=(10, 4))
+
+        # Direct Text Entry
+        self.entry_delay = tk.Entry(delay_row, width=4, font=("Segoe UI", 10, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
+        self.entry_delay.insert(0, str(self.engine.delay_ms))
+        self.entry_delay.pack(side=tk.LEFT, padx=2)
+        self.entry_delay.bind("<Return>", self.on_entry_delay_submit)
+        self.entry_delay.bind("<FocusOut>", self.on_entry_delay_submit)
+
+        # Quick [+] button
+        btn_plus = tk.Button(
+            delay_row, text="+", font=("Segoe UI", 10, "bold"), width=2, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_delay(+1)
+        )
+        btn_plus.pack(side=tk.LEFT, padx=(4, 10))
+
+        self.lbl_sync_indicator = tk.Label(delay_row, text="28 ms (100% Sync)", font=("Segoe UI", 9, "bold"), fg="#38A169", bg="#FFFFFF")
+        self.lbl_sync_indicator.pack(side=tk.RIGHT)
+
+        # Slider
+        self.slider = tk.Scale(
+            inner,
+            from_=18,
+            to=42,
+            orient=tk.HORIZONTAL,
+            showvalue=False,
+            bg="#FFFFFF",
+            highlightthickness=0,
+            command=self.on_slider_change,
+        )
+        self.slider.set(self.engine.delay_ms)
+        self.slider.pack(fill=tk.X, pady=(0, 6))
+
+        # Explanatory Technical Note
+        note_frame = tk.Frame(inner, bg="#FEFCBF", bd=1, relief=tk.SOLID, padx=8, pady=6)
+        note_frame.pack(fill=tk.X)
+        lbl_note = tk.Label(
+            note_frame,
+            text="💡 Why 28 ms? BongoCat samples keys every 16 ms. At 28 ms, every press and release is guaranteed to be detected (100% sync, ~1,035 CPS). Lowering to 20 ms drops ~40% of clicks due to game timer aliasing.",
+            font=("Segoe UI", 8),
+            fg="#744210",
+            bg="#FEFCBF",
+            wraplength=440,
+            justify=tk.LEFT,
+        )
+        lbl_note.pack(anchor=tk.W)
+
+        self.update_preset_buttons_ui()
+
+    def select_preset(self, preset_key):
+        self.engine.update_keys(preset_key)
+        self.lbl_preset_tag.configure(text=f"{PRESETS[preset_key]['title']} ({PRESETS[preset_key]['badge']})")
+        self.update_preset_buttons_ui()
+
+    def update_preset_buttons_ui(self):
+        cur = self.engine.preset_key
+        for key, btn in self.preset_buttons.items():
+            if key == cur:
+                btn.configure(bg="#E05D52", fg="#FFFFFF", activebackground="#C53030", activeforeground="#FFFFFF")
+            else:
+                btn.configure(bg="#EDF2F7", fg="#4A5568", activebackground="#E2E8F0", activeforeground="#1A202C")
+
+        cfg = PRESETS[cur]
+        self.lbl_desc_speed.configure(text=f"Estimated Throughput: {cfg['approx_cps']} ({cfg['badge']})")
+        self.lbl_desc_body.configure(text=cfg["desc"])
+
+    def on_slider_change(self, val):
+        ms = int(val)
+        self.engine.set_delay_ms(ms)
+        self.entry_delay.delete(0, tk.END)
+        self.entry_delay.insert(0, str(ms))
+        self.update_sync_label(ms)
+
+    def on_entry_delay_submit(self, event=None):
+        raw = self.entry_delay.get().strip()
+        if raw.isdigit():
+            ms = max(16, min(50, int(raw)))
+            self.slider.set(ms)
+            self.engine.set_delay_ms(ms)
+            self.update_sync_label(ms)
+
+    def adjust_delay(self, delta):
+        cur = self.engine.delay_ms
+        new_val = max(16, min(50, cur + delta))
+        self.slider.set(new_val)
+        self.engine.set_delay_ms(new_val)
+        self.entry_delay.delete(0, tk.END)
+        self.entry_delay.insert(0, str(new_val))
+        self.update_sync_label(new_val)
+
+    def update_sync_label(self, ms):
+        if ms in range(26, 32):
+            self.lbl_sync_indicator.configure(text=f"{ms} ms (100% Sync)", fg="#38A169")
+        elif ms < 26:
+            self.lbl_sync_indicator.configure(text=f"{ms} ms (Fast - May drop ~30%)", fg="#DD6B20")
+        else:
+            self.lbl_sync_indicator.configure(text=f"{ms} ms (Safe & Stable)", fg="#3182CE")
 
     def toggle_settings_panel(self):
         self.show_settings = not self.show_settings
         if self.show_settings:
-            self.settings_frame.pack(fill=tk.X, pady=(6, 0))
-            self.root.geometry("480x560")
-            self.btn_settings.configure(text="▲ Close Settings")
+            self.settings_frame.pack(fill=tk.X, pady=(10, 0))
+            self.root.geometry("520x840")
+            self.btn_settings.configure(text="▲  Close Settings", bg="#CBD5E0")
         else:
             self.settings_frame.pack_forget()
-            self.root.geometry("480x470")
-            self.btn_settings.configure(text="⚙️ Settings")
-
-    def on_delay_change(self, val):
-        ms = int(val)
-        self.engine.set_delay_ms(ms)
-        sync_text = "100% Sync" if ms in range(26, 32) else "Fast"
-        self.lbl_delay_val.configure(text=f"{ms} ms ({sync_text})")
-
-    def on_mode_change(self):
-        m = self.mode_var.get()
-        self.engine.update_keys(m)
+            self.root.geometry("520x540")
+            self.btn_settings.configure(text="⚙️  Speed & Settings", bg="#EDF2F7")
 
     def update_always_on_top(self):
         self.root.attributes("-topmost", self.top_var.get())
@@ -436,16 +498,17 @@ class BongoApp:
         if active_time > 0 and self.engine.running:
             actual_cps = self.engine.total_clicks / active_time
 
-        # Update button visual
+        # Update Primary Button & Status Bar
         if self.engine.running:
-            self.btn_toggle.configure(text="⏸ PAUSE (F8)", bg="#42BA82", activebackground="#38A271")
+            self.btn_toggle.configure(text="⏸  PAUSE FARMING  (F8)", bg="#20C997", activebackground="#12B886")
+            self.status_dot.configure(fg="#38A169")
+            self.status_text.configure(text="FARMING ACTIVE - Injecting inputs...", fg="#276749")
         else:
-            self.btn_toggle.configure(text="▶ START FARMING (F8)", bg="#FF766D", activebackground="#E5635B")
+            self.btn_toggle.configure(text="▶  START FARMING  (F8)", bg="#FF6B6B", activebackground="#FA5252")
+            self.status_dot.configure(fg="#A0AEC0")
+            self.status_text.configure(text="PAUSED - Press [F8] or button to resume", fg="#4A5568")
 
-        # Update animated paws
-        self.canvas.update_paws(self.engine.paw_step)
-
-        # Update stats
+        # Update Stats Cards
         self.card_clicks.val_label.configure(text=f"{self.engine.total_clicks:,}")
         self.card_cps.val_label.configure(text=f"{int(actual_cps):,} CPS" if self.engine.running else "0 CPS")
         self.card_time.val_label.configure(text=format_duration(active_time))
