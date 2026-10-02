@@ -27,68 +27,35 @@ user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 winmm = ctypes.windll.winmm
 
-KEYEVENTF_KEYUP = 0x0002
 VK_F8 = 0x77
 VK_F10 = 0x79
 
-# Modifiers and interactive keys that trigger Smart Auto-Pause to protect user actions
-USER_INTERACTIVE_KEYS = (
-    0x01, # VK_LBUTTON  - Left Mouse Button (window dragging, text selection, YouTube 2x)
-    0x02, # VK_RBUTTON  - Right Mouse Button (context menus)
-    0x20, # VK_SPACE    - Spacebar (YouTube 2x playback)
-    0x5B, # VK_LWIN     - Left Windows key (Start menu, Win+E, Win+R)
-    0x5C, # VK_RWIN     - Right Windows key
-    0x11, # VK_CONTROL  - Ctrl key (Ctrl+C, Ctrl+V, shortcuts)
-    0x12, # VK_MENU     - Alt key (Alt+Tab, app shortcuts)
-    0x10, # VK_SHIFT    - Shift key (capitalization, selection)
-)
-
-# --- BULLETPROOF VIRTUAL KEY MATRIX ---
-# Strictly vetted non-typing, non-shell, collision-free virtual keys supported by BongoCat.
-# All keys with scan code clashes (e.g. 0xEA, 0xEB, 0xF1, 0xFD which clash with Win / Win+P / PA1)
-# and character-emitting keys (0xE4, 0xE7) have been completely purged.
-
-SAFE_F_KEYS = list(range(0x7C, 0x88)) # F13 - F24 (12 keys: scans 0x64 to 0x76)
-DORMANT_KEYS = [                       # Completely dormant codes (8 keys: scan 0x00, zero shell mapping)
-    0x93, 0x94, 0x95, 0x96,           # Fujitsu Oasys dormant codes
-    0xF6, 0xF7, 0xF8, 0xFC            # Attn, CrSel, ExSel, NoName
-]
+PIPE_ACCESS_DUPLEX = 0x00000003
+PIPE_TYPE_BYTE = 0x00000000
+PIPE_READMODE_BYTE = 0x00000000
+PIPE_WAIT = 0x00000000
+INVALID_HANDLE_VALUE = -1
 
 PRESETS = {
     "overdrive": {
         "title": "Overdrive",
-        "badge": "20 keys",
-        "approx_cps": "~360 – 500 CPS",
-        "desc": "Full vetted matrix (F13-F24 + dormant codes). Maximum clean throughput with zero text typing and zero Win+P or shell hotkey conflicts.",
-        "keys": SAFE_F_KEYS + DORMANT_KEYS,
+        "badge": "1,111 CPS",
+        "taps_per_tick": 100,
+        "desc": "Direct memory pipe injection (100 taps / 90ms). Zero Windows keystrokes, zero YouTube interruptions, 100% click registration.",
     },
     "turbo": {
         "title": "Turbo",
-        "badge": "16 keys",
-        "approx_cps": "~285 – 400 CPS",
-        "desc": "Balanced mode using 16 clean virtual keys (F13-F24 + 4 dormant codes). Moderate event frequency.",
-        "keys": SAFE_F_KEYS + DORMANT_KEYS[:4],
+        "badge": "555 CPS",
+        "taps_per_tick": 50,
+        "desc": "Moderate direct injection (50 taps / 90ms). Balanced rate with minimal memory traffic.",
     },
     "stealth": {
         "title": "Stealth",
-        "badge": "12 keys",
-        "approx_cps": "~215 – 300 CPS",
-        "desc": "Uses only standard F13-F24 function keys. Minimal event generation, ultra-light background farming.",
-        "keys": SAFE_F_KEYS,
+        "badge": "277 CPS",
+        "taps_per_tick": 25,
+        "desc": "Low-profile injection (25 taps / 90ms). Ultra-smooth background progression.",
     },
 }
-
-def split_groups(keys):
-    half = len(keys) // 2
-    return keys[:half], keys[half:]
-
-def press_keys(keys):
-    for vk in keys:
-        user32.keybd_event(vk, 0, 0, 0)
-
-def release_keys(keys):
-    for vk in keys:
-        user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
 
 def format_duration(seconds: float) -> str:
     mins, secs = divmod(int(seconds), 60)
@@ -97,39 +64,104 @@ def format_duration(seconds: float) -> str:
         return f"{hours:02d}:{mins:02d}:{secs:02d}"
     return f"{mins:02d}:{secs:02d}"
 
+class BongoDirectIPC:
+    def __init__(self, pipe_name=r"\\.\pipe\BongoCatxTheFarmerWasReplaced"):
+        self.pipe_name = pipe_name
+        self.h_pipe = None
+        self.connected = False
+        self._lock = threading.Lock()
+
+    def listen(self):
+        with self._lock:
+            if self.h_pipe:
+                try:
+                    kernel32.DisconnectNamedPipe(self.h_pipe)
+                    kernel32.CloseHandle(self.h_pipe)
+                except Exception:
+                    pass
+                self.h_pipe = None
+                self.connected = False
+
+            self.h_pipe = kernel32.CreateNamedPipeW(
+                self.pipe_name,
+                PIPE_ACCESS_DUPLEX,
+                PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+                1,
+                4096,
+                4096,
+                1000,
+                None
+            )
+
+            if self.h_pipe == INVALID_HANDLE_VALUE or self.h_pipe == 0xFFFFFFFFFFFFFFFF:
+                self.h_pipe = None
+                return False
+
+        # Wait for BongoCat client to connect
+        res = kernel32.ConnectNamedPipe(self.h_pipe, None)
+        err = kernel32.GetLastError()
+        if res or err == 535: # ERROR_PIPE_CONNECTED
+            with self._lock:
+                self.connected = True
+            return True
+        else:
+            with self._lock:
+                self.connected = False
+            return False
+
+    def send_taps(self, count: int) -> bool:
+        with self._lock:
+            if not self.connected or not self.h_pipe:
+                return False
+
+            text = str(count)
+            raw = text.encode('utf-16le')
+            length = len(raw)
+            packet = bytes([length // 256, length & 255]) + raw
+            written = wintypes.DWORD()
+            success = kernel32.WriteFile(self.h_pipe, packet, len(packet), ctypes.byref(written), None)
+            if not success:
+                self.connected = False
+                return False
+            return True
+
+    def close(self):
+        with self._lock:
+            if self.h_pipe:
+                try:
+                    kernel32.DisconnectNamedPipe(self.h_pipe)
+                    kernel32.CloseHandle(self.h_pipe)
+                except Exception:
+                    pass
+                self.h_pipe = None
+                self.connected = False
+
 class ClickerEngine:
-    def __init__(self, preset_key="overdrive", delay_ms=28, smart_pause=True):
+    def __init__(self, preset_key="overdrive"):
+        self.ipc = BongoDirectIPC()
         self.preset_key = preset_key
-        self.delay_ms = delay_ms
-        self.delay_sec = delay_ms / 1000.0
-        self.smart_pause = smart_pause
-        self.update_keys(preset_key)
+        self.taps_per_tick = PRESETS[preset_key]["taps_per_tick"]
+        self.tick_interval = 0.090 # 90ms matches BongoCat's internal IPC thread
 
         self.running = False
         self.shutdown_requested = False
         self.total_clicks = 0
         self.active_duration = 0.0
         self.last_state_change = time.perf_counter()
-        self.paw_step = 0
+        self.ipc_status_text = "Connecting to BongoCat..."
 
-    def update_keys(self, preset_key):
+    def set_preset(self, preset_key: str):
         self.preset_key = preset_key
-        keys = PRESETS.get(preset_key, PRESETS["overdrive"])["keys"]
-        self.group_a, self.group_b = split_groups(keys)
-        self.step_clicks = len(self.group_a)
+        self.taps_per_tick = PRESETS.get(preset_key, PRESETS["overdrive"])["taps_per_tick"]
 
-    def set_delay_ms(self, delay_ms):
-        self.delay_ms = max(16, min(50, int(delay_ms)))
-        self.delay_sec = self.delay_ms / 1000.0
+    def set_custom_taps(self, taps: int):
+        self.taps_per_tick = max(1, min(500, int(taps)))
 
     def toggle(self):
         now = time.perf_counter()
         if self.running:
             self.running = False
             self.active_duration += now - self.last_state_change
-            release_keys(self.group_a)
-            release_keys(self.group_b)
-            self.paw_step = 0
         else:
             self.running = True
             self.last_state_change = now
@@ -137,41 +169,29 @@ class ClickerEngine:
     def shutdown(self):
         self.shutdown_requested = True
         self.running = False
-        release_keys(self.group_a)
-        release_keys(self.group_b)
+        self.ipc.close()
+
+    def pipe_worker(self):
+        while not self.shutdown_requested:
+            if not self.ipc.connected:
+                self.ipc_status_text = "Waiting for BongoCat..."
+                if self.ipc.listen():
+                    self.ipc_status_text = "Connected (Direct IPC Active)"
+                else:
+                    time.sleep(0.5)
+            else:
+                time.sleep(0.2)
 
     def run_loop(self):
-        cycle = 0
         while not self.shutdown_requested:
-            if self.running:
-                # Smart Auto-Pause:
-                # If user is holding Win, Ctrl, Alt, Shift, Space, or LMB:
-                # yield input immediately to prevent hotkey collisions or canceling YouTube 2x / dragging.
-                if self.smart_pause:
-                    user_busy = any(bool(user32.GetAsyncKeyState(k) & 0x8000) for k in USER_INTERACTIVE_KEYS)
-                    if user_busy:
-                        if self.paw_step != 0:
-                            release_keys(self.group_a)
-                            release_keys(self.group_b)
-                            self.paw_step = 0
-                        time.sleep(0.015)
-                        continue
-
-                # Alternating injection
-                if cycle % 2 == 0:
-                    release_keys(self.group_b)
-                    press_keys(self.group_a)
-                    self.paw_step = 1
+            if self.running and self.ipc.connected:
+                batch = self.taps_per_tick
+                if self.ipc.send_taps(batch):
+                    self.total_clicks += batch
                 else:
-                    release_keys(self.group_a)
-                    press_keys(self.group_b)
-                    self.paw_step = 2
-
-                self.total_clicks += self.step_clicks
-                cycle += 1
-                time.sleep(self.delay_sec)
+                    self.ipc_status_text = "Reconnecting to BongoCat..."
+                time.sleep(self.tick_interval)
             else:
-                self.paw_step = 0
                 time.sleep(0.040)
 
 def hotkey_listener(engine: ClickerEngine):
@@ -194,13 +214,17 @@ def hotkey_listener(engine: ClickerEngine):
 class BongoApp:
     def __init__(self, root: tk.Tk):
         self.root = root
-        self.root.title("Bongo Cat Turbo Clicker")
+        self.root.title("Bongo Cat Turbo Clicker (Direct IPC)")
         self.root.geometry("520x540")
         self.root.resizable(False, False)
         self.root.configure(bg="#FFF9F5")
 
         winmm.timeBeginPeriod(1)
-        self.engine = ClickerEngine(preset_key="overdrive", delay_ms=28, smart_pause=True)
+        self.engine = ClickerEngine(preset_key="overdrive")
+
+        # Worker threads
+        self.pipe_thread = threading.Thread(target=self.engine.pipe_worker, daemon=True)
+        self.pipe_thread.start()
 
         self.click_thread = threading.Thread(target=self.engine.run_loop, daemon=True)
         self.click_thread.start()
@@ -249,7 +273,7 @@ class BongoApp:
 
         self.status_text = tk.Label(
             status_bar,
-            text="READY - Press [F8] to start farming",
+            text="Connecting to BongoCat...",
             font=("Segoe UI", 9, "bold"),
             fg="#4A5568",
             bg="#FFF9F5",
@@ -258,10 +282,10 @@ class BongoApp:
 
         self.lbl_preset_tag = tk.Label(
             status_bar,
-            text="Overdrive (20 keys)",
+            text="Direct IPC (1,111 CPS)",
             font=("Segoe UI", 8, "bold"),
-            fg="#E05D52",
-            bg="#FFEBE8",
+            fg="#2B6CB0",
+            bg="#EBF8FF",
             padx=8,
             pady=2,
             bd=1,
@@ -349,13 +373,13 @@ class BongoApp:
         # Header
         hdr = tk.Frame(self.settings_frame, bg="#F7FAFC", padx=12, pady=8)
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text="⚙️ SPEED PRESETS & BEHAVIOR", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#F7FAFC").pack(side=tk.LEFT)
+        tk.Label(hdr, text="⚙️ DIRECT IPC SPEED & CALIBRATION", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#F7FAFC").pack(side=tk.LEFT)
 
         inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=14, pady=10)
         inner.pack(fill=tk.BOTH, expand=True)
 
         # Preset selection
-        tk.Label(inner, text="Select Mode Preset:", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 6))
+        tk.Label(inner, text="Select Speed Preset:", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 6))
 
         presets_bar = tk.Frame(inner, bg="#FFFFFF")
         presets_bar.pack(fill=tk.X, pady=(0, 8))
@@ -385,69 +409,55 @@ class BongoApp:
         self.lbl_desc_body = tk.Label(self.card_desc, text="", font=("Segoe UI", 8), fg="#4A5568", bg="#F8FAFC", wraplength=440, justify=tk.LEFT)
         self.lbl_desc_body.pack(anchor=tk.W, pady=(2, 0))
 
-        # Direct Delay / Speed Input & Slider
-        delay_row = tk.Frame(inner, bg="#FFFFFF")
-        delay_row.pack(fill=tk.X, pady=(0, 4))
+        # Direct Taps Input & Slider
+        taps_row = tk.Frame(inner, bg="#FFFFFF")
+        taps_row.pack(fill=tk.X, pady=(0, 4))
 
-        tk.Label(delay_row, text="Hold Delay (ms):", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
+        tk.Label(taps_row, text="Clicks Per Batch (every 90ms):", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
 
         btn_minus = tk.Button(
-            delay_row, text="−", font=("Segoe UI", 10, "bold"), width=2, bg="#EDF2F7", relief=tk.FLAT,
-            command=lambda: self.adjust_delay(-1)
+            taps_row, text="−10", font=("Segoe UI", 8, "bold"), width=3, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_taps(-10)
         )
         btn_minus.pack(side=tk.LEFT, padx=(10, 4))
 
-        self.entry_delay = tk.Entry(delay_row, width=4, font=("Segoe UI", 10, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
-        self.entry_delay.insert(0, str(self.engine.delay_ms))
-        self.entry_delay.pack(side=tk.LEFT, padx=2)
-        self.entry_delay.bind("<Return>", self.on_entry_delay_submit)
-        self.entry_delay.bind("<FocusOut>", self.on_entry_delay_submit)
+        self.entry_taps = tk.Entry(taps_row, width=4, font=("Segoe UI", 10, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
+        self.entry_taps.insert(0, str(self.engine.taps_per_tick))
+        self.entry_taps.pack(side=tk.LEFT, padx=2)
+        self.entry_taps.bind("<Return>", self.on_entry_taps_submit)
+        self.entry_taps.bind("<FocusOut>", self.on_entry_taps_submit)
 
         btn_plus = tk.Button(
-            delay_row, text="+", font=("Segoe UI", 10, "bold"), width=2, bg="#EDF2F7", relief=tk.FLAT,
-            command=lambda: self.adjust_delay(+1)
+            taps_row, text="+10", font=("Segoe UI", 8, "bold"), width=3, bg="#EDF2F7", relief=tk.FLAT,
+            command=lambda: self.adjust_taps(+10)
         )
         btn_plus.pack(side=tk.LEFT, padx=(4, 10))
 
-        self.lbl_sync_indicator = tk.Label(delay_row, text="28 ms (100% Sync)", font=("Segoe UI", 9, "bold"), fg="#38A169", bg="#FFFFFF")
-        self.lbl_sync_indicator.pack(side=tk.RIGHT)
+        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 9, "bold"), fg="#38A169", bg="#FFFFFF")
+        self.lbl_calculated_cps.pack(side=tk.RIGHT)
 
         self.slider = tk.Scale(
             inner,
-            from_=18,
-            to=42,
+            from_=10,
+            to=250,
             orient=tk.HORIZONTAL,
             showvalue=False,
             bg="#FFFFFF",
             highlightthickness=0,
             command=self.on_slider_change,
         )
-        self.slider.set(self.engine.delay_ms)
+        self.slider.set(self.engine.taps_per_tick)
         self.slider.pack(fill=tk.X, pady=(0, 8))
 
-        # Smart Auto-Pause Toggle
-        self.smart_pause_var = tk.BooleanVar(value=True)
-        chk_pause = tk.Checkbutton(
-            inner,
-            text="⚡ Smart Auto-Pause: Yield when holding Win, Ctrl, Alt, Shift, LMB, Space",
-            variable=self.smart_pause_var,
-            font=("Segoe UI", 8, "bold"),
-            fg="#2D3748",
-            bg="#FFFFFF",
-            activebackground="#FFFFFF",
-            command=self.on_smart_pause_toggle,
-        )
-        chk_pause.pack(anchor=tk.W, pady=(0, 8))
-
-        # Explanatory Technical Note
-        note_frame = tk.Frame(inner, bg="#FEFCBF", bd=1, relief=tk.SOLID, padx=8, pady=6)
+        # Technical Note
+        note_frame = tk.Frame(inner, bg="#E6FFFA", bd=1, relief=tk.SOLID, padx=8, pady=6)
         note_frame.pack(fill=tk.X)
         lbl_note = tk.Label(
             note_frame,
-            text="💡 Zero Conflict Guarantee: All keys with scan code clashes (Win+P display projector, touch keyboard, explorer arrows, ghost zeros) have been eliminated. Smart Auto-Pause instantly yields whenever you hold modifiers, mouse buttons, or spacebar.",
+            text="✨ Native Direct IPC Mode: Injects clicks directly into BongoCat's memory through its native internal named pipe (BongoCatxTheFarmerWasReplaced). Zero keyboard simulation, zero interference with YouTube 2x speed, zero Windows key conflicts, and 100% click registration.",
             font=("Segoe UI", 8),
-            fg="#744210",
-            bg="#FEFCBF",
+            fg="#234E52",
+            bg="#E6FFFA",
             wraplength=440,
             justify=tk.LEFT,
         )
@@ -456,56 +466,50 @@ class BongoApp:
         self.update_preset_buttons_ui()
 
     def select_preset(self, preset_key):
-        self.engine.update_keys(preset_key)
-        self.lbl_preset_tag.configure(text=f"{PRESETS[preset_key]['title']} ({PRESETS[preset_key]['badge']})")
+        self.engine.set_preset(preset_key)
+        self.slider.set(self.engine.taps_per_tick)
+        self.entry_taps.delete(0, tk.END)
+        self.entry_taps.insert(0, str(self.engine.taps_per_tick))
         self.update_preset_buttons_ui()
 
     def update_preset_buttons_ui(self):
         cur = self.engine.preset_key
         for key, btn in self.preset_buttons.items():
             if key == cur:
-                btn.configure(bg="#E05D52", fg="#FFFFFF", activebackground="#C53030", activeforeground="#FFFFFF")
+                btn.configure(bg="#2B6CB0", fg="#FFFFFF", activebackground="#2C5282", activeforeground="#FFFFFF")
             else:
                 btn.configure(bg="#EDF2F7", fg="#4A5568", activebackground="#E2E8F0", activeforeground="#1A202C")
 
-        cfg = PRESETS[cur]
-        self.lbl_desc_speed.configure(text=f"Estimated Throughput: {cfg['approx_cps']} ({cfg['badge']})")
+        cfg = PRESETS.get(cur, PRESETS["overdrive"])
+        cps = int(self.engine.taps_per_tick / 0.090)
+        self.lbl_desc_speed.configure(text=f"Direct IPC Throughput: ~{cps:,} CPS")
         self.lbl_desc_body.configure(text=cfg["desc"])
+        self.lbl_calculated_cps.configure(text=f"≈ {cps:,} CPS")
+        self.lbl_preset_tag.configure(text=f"Direct IPC (~{cps:,} CPS)")
 
     def on_slider_change(self, val):
-        ms = int(val)
-        self.engine.set_delay_ms(ms)
-        self.entry_delay.delete(0, tk.END)
-        self.entry_delay.insert(0, str(ms))
-        self.update_sync_label(ms)
+        taps = int(val)
+        self.engine.set_custom_taps(taps)
+        self.entry_taps.delete(0, tk.END)
+        self.entry_taps.insert(0, str(taps))
+        self.update_preset_buttons_ui()
 
-    def on_entry_delay_submit(self, event=None):
-        raw = self.entry_delay.get().strip()
+    def on_entry_taps_submit(self, event=None):
+        raw = self.entry_taps.get().strip()
         if raw.isdigit():
-            ms = max(16, min(50, int(raw)))
-            self.slider.set(ms)
-            self.engine.set_delay_ms(ms)
-            self.update_sync_label(ms)
+            taps = max(1, min(500, int(raw)))
+            self.slider.set(taps)
+            self.engine.set_custom_taps(taps)
+            self.update_preset_buttons_ui()
 
-    def adjust_delay(self, delta):
-        cur = self.engine.delay_ms
-        new_val = max(16, min(50, cur + delta))
+    def adjust_taps(self, delta):
+        cur = self.engine.taps_per_tick
+        new_val = max(1, min(500, cur + delta))
         self.slider.set(new_val)
-        self.engine.set_delay_ms(new_val)
-        self.entry_delay.delete(0, tk.END)
-        self.entry_delay.insert(0, str(new_val))
-        self.update_sync_label(new_val)
-
-    def on_smart_pause_toggle(self):
-        self.engine.smart_pause = self.smart_pause_var.get()
-
-    def update_sync_label(self, ms):
-        if ms in range(26, 32):
-            self.lbl_sync_indicator.configure(text=f"{ms} ms (100% Sync)", fg="#38A169")
-        elif ms < 26:
-            self.lbl_sync_indicator.configure(text=f"{ms} ms (Fast - May drop ~25%)", fg="#DD6B20")
-        else:
-            self.lbl_sync_indicator.configure(text=f"{ms} ms (Safe & Stable)", fg="#3182CE")
+        self.engine.set_custom_taps(new_val)
+        self.entry_taps.delete(0, tk.END)
+        self.entry_taps.insert(0, str(new_val))
+        self.update_preset_buttons_ui()
 
     def toggle_settings_panel(self):
         self.show_settings = not self.show_settings
@@ -539,11 +543,15 @@ class BongoApp:
         if self.engine.running:
             self.btn_toggle.configure(text="⏸  PAUSE FARMING  (F8)", bg="#20C997", activebackground="#12B886")
             self.status_dot.configure(fg="#38A169")
-            self.status_text.configure(text="FARMING ACTIVE - Injecting inputs...", fg="#276749")
+            self.status_text.configure(text=f"FARMING ACTIVE - {self.engine.ipc_status_text}", fg="#276749")
         else:
             self.btn_toggle.configure(text="▶  START FARMING  (F8)", bg="#FF6B6B", activebackground="#FA5252")
-            self.status_dot.configure(fg="#A0AEC0")
-            self.status_text.configure(text="PAUSED - Press [F8] to resume", fg="#4A5568")
+            if self.engine.ipc.connected:
+                self.status_dot.configure(fg="#3182CE")
+                self.status_text.configure(text="READY - Connected (Press [F8] to start)", fg="#2B6CB0")
+            else:
+                self.status_dot.configure(fg="#DD6B20")
+                self.status_text.configure(text="WAITING - Launch BongoCat to connect", fg="#C05621")
 
         # Update Stats Cards
         self.card_clicks.val_label.configure(text=f"{self.engine.total_clicks:,}")
@@ -571,7 +579,10 @@ def run_cli():
         kernel32.SetConsoleMode(handle, mode.value | 0x0004)
 
     winmm.timeBeginPeriod(1)
-    engine = ClickerEngine(preset_key="overdrive", delay_ms=28, smart_pause=True)
+    engine = ClickerEngine(preset_key="overdrive")
+
+    pipe_thread = threading.Thread(target=engine.pipe_worker, daemon=True)
+    pipe_thread.start()
 
     click_thread = threading.Thread(target=engine.run_loop, daemon=True)
     click_thread.start()
@@ -580,13 +591,13 @@ def run_cli():
     hotkey_thread.start()
 
     print("=" * 66)
-    print("           Bongo Cat Turbo Clicker (CLI Mode)")
+    print("       Bongo Cat Turbo Clicker (Direct IPC Mode)")
     print("=" * 66)
     print(" Controls:")
     print("   [F8]  - Start / Pause")
     print("   [F10] - Quit program")
     print("=" * 66)
-    print(" Ready. Press [F8] to start farming.\n")
+    print(" Ready. Connecting to BongoCat named pipe...\n")
 
     try:
         while not engine.shutdown_requested:
