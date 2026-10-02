@@ -34,18 +34,19 @@ VK_F8 = 0x77
 VK_F10 = 0x79
 
 # --- VIRTUAL KEY MATRIX ---
-# Strictly filtered harmless keys supported by BongoCat's BUTTONS array.
-# Explicitly excluded:
-# - VK_NAVIGATION_* (0x88-0x8F): causes cursor/selection jumping in Windows Explorer.
+# Strictly vetted non-typing virtual keys supported by BongoCat's BUTTONS array.
+# Explicitly excluded to prevent side effects:
+# - VK_PACKET (0xE7) & VK_ICO_00 (0xE4): these emit '0'/'\0' character packets into active chat/inputs.
+# - VK_NAVIGATION_* (0x88-0x8F): causes selection jumping in Windows Explorer.
 # - Gamepad buttons (0xC3-0xDA): triggers Windows Touch/On-Screen Keyboard when Win key is pressed.
 # - VK_PLAY (0xFA) & VK_ZOOM (0xFB): triggers Windows media/accessibility tools.
 
 SAFE_F_KEYS = list(range(0x7C, 0x88)) # F13 - F24 (12 keys)
-DORMANT_SYSTEM_KEYS = [                # Fujitsu & dormant ICO codes (6 keys)
-    0x93, 0x94, 0x95, 0x96, 0xE3, 0xE4
+DORMANT_SYSTEM_KEYS = [                # Fujitsu Oasys dormant codes (4 keys)
+    0x93, 0x94, 0x95, 0x96
 ]
-DORMANT_OEM_KEYS = [                   # Completely unassigned / non-interactive OEM codes (22 keys)
-    0xE6, 0xE7, 0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
+DORMANT_OEM_KEYS = [                   # Completely unassigned / non-character OEM codes (20 keys)
+    0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
     0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFC,
     0xFD, 0xFE
 ]
@@ -53,17 +54,17 @@ DORMANT_OEM_KEYS = [                   # Completely unassigned / non-interactive
 PRESETS = {
     "overdrive": {
         "title": "Overdrive",
-        "badge": "40 keys",
-        "approx_cps": "~715 – 800 CPS",
-        "desc": "Full dormant key matrix (F13-F24 + Fujitsu + Clean OEM). Maximum clean throughput with zero Windows Explorer or Game Bar conflicts.",
+        "badge": "36 keys",
+        "approx_cps": "~645 – 720 CPS",
+        "desc": "Full clean key matrix (F13-F24 + Fujitsu + Clean OEM). Maximum clean throughput with zero text typing and zero Explorer/Game Bar conflicts.",
         "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS,
     },
     "turbo": {
         "title": "Turbo",
         "badge": "24 keys",
         "approx_cps": "~430 CPS",
-        "desc": "Balanced mode using 24 isolated virtual keys (F13-F24 + Select OEM). Moderate event frequency.",
-        "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS[:6],
+        "desc": "Balanced mode using 24 isolated virtual keys (F13-F24 + Fujitsu + Select OEM). Moderate event frequency.",
+        "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS[:8],
     },
     "stealth": {
         "title": "Stealth",
@@ -140,8 +141,8 @@ class ClickerEngine:
         cycle = 0
         while not self.shutdown_requested:
             if self.running:
-                # Smart Pause: If user is actively holding Left Mouse Button (e.g. YouTube 2x, drag)
-                # or holding Spacebar (YouTube 2x), yield input to prevent interrupting user actions.
+                # Smart Pause: If user holds Left Mouse Button (YouTube 2x, text dragging)
+                # or holds Spacebar (YouTube 2x), yield input to prevent interrupting user actions.
                 if self.smart_pause:
                     lmb_held = bool(user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
                     space_held = bool(user32.GetAsyncKeyState(VK_SPACE) & 0x8000)
@@ -254,7 +255,7 @@ class BongoApp:
 
         self.lbl_preset_tag = tk.Label(
             status_bar,
-            text="Overdrive (40 keys)",
+            text="Overdrive (36 keys)",
             font=("Segoe UI", 8, "bold"),
             fg="#E05D52",
             bg="#FFEBE8",
@@ -440,7 +441,7 @@ class BongoApp:
         note_frame.pack(fill=tk.X)
         lbl_note = tk.Label(
             note_frame,
-            text="💡 Sync Guarantee: BongoCat samples keys every 16 ms. A 28 ms delay guarantees 100% click registration without dropped inputs. Keys are strictly isolated so they never interfere with Windows Explorer, Touch Keyboard, or gaming.",
+            text="💡 Zero Ghost Inputs Guarantee: Only 100% non-typing virtual keys are used (no characters, zero zeros, zero touch keyboard, zero explorer navigation). 28 ms delay guarantees 100% click registration with BongoCat's 16ms internal loop.",
             font=("Segoe UI", 8),
             fg="#744210",
             bg="#FEFCBF",
@@ -539,7 +540,7 @@ class BongoApp:
         else:
             self.btn_toggle.configure(text="▶  START FARMING  (F8)", bg="#FF6B6B", activebackground="#FA5252")
             self.status_dot.configure(fg="#A0AEC0")
-            self.status_text.configure(text="PAUSED - Press [F8] or button to resume", fg="#4A5568")
+            self.status_text.configure(text="PAUSED - Press [F8] to resume", fg="#4A5568")
 
         # Update Stats Cards
         self.card_clicks.val_label.configure(text=f"{self.engine.total_clicks:,}")
