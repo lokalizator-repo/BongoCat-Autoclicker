@@ -7,8 +7,7 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import ttk
-import winsound
+from tkinter import font as tkFont
 
 try:
     ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -17,6 +16,11 @@ except Exception:
         ctypes.windll.user32.SetProcessDPIAware()
     except Exception:
         pass
+
+try:
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("bongocat.autoclicker.v1")
+except Exception:
+    pass
 
 try:
     from PIL import Image, ImageDraw, ImageTk
@@ -31,8 +35,6 @@ winmm = ctypes.windll.winmm
 VK_F8 = 0x77
 VK_F10 = 0x79
 
-USER_INTERACTIVE_KEYS = (0x01, 0x02, 0x20, 0x5B, 0x5C, 0x11, 0x12, 0x10)
-
 PIPE_ACCESS_DUPLEX = 0x00000003
 PIPE_TYPE_BYTE = 0x00000000
 PIPE_READMODE_BYTE = 0x00000000
@@ -40,11 +42,12 @@ PIPE_WAIT = 0x00000000
 INVALID_HANDLE_VALUE = -1
 
 MAX_INT32_CAP = 2_147_483_646
+FONT_FAMILY = "Bahnschrift"
 
 def parse_taps_input(raw: str) -> int:
     s = raw.strip().lower().replace(",", "").replace(" ", "").replace("_", "")
     if not s:
-        return 100
+        return 1000
     if s == "max":
         return MAX_INT32_CAP
     mult = 1
@@ -62,38 +65,33 @@ def parse_taps_input(raw: str) -> int:
         val = int(float(s) * mult)
         return max(1, min(MAX_INT32_CAP, val))
     except (ValueError, OverflowError):
-        return 100
+        return 1000
 
 PRESETS = {
-    "overdrive": {
-        "title": "Overdrive",
-        "badge": "1.1k CPS",
-        "taps_per_tick": 100,
-        "desc": "100 clicks per batch (90ms interval).",
+    "1k": {
+        "title": "1,000",
+        "badge": "~11k CPS",
+        "taps_per_tick": 1_000,
     },
-    "hyper": {
-        "title": "Hyper",
-        "badge": "111k CPS",
-        "taps_per_tick": 10000,
-        "desc": "10,000 clicks per batch (90ms interval).",
+    "100k": {
+        "title": "100,000",
+        "badge": "~1.1M CPS",
+        "taps_per_tick": 100_000,
     },
-    "infinity": {
-        "title": "Infinity",
-        "badge": "11.1M CPS",
-        "taps_per_tick": 1000000,
-        "desc": "1,000,000 clicks per batch (90ms interval).",
+    "1m": {
+        "title": "1,000,000",
+        "badge": "~11.1M CPS",
+        "taps_per_tick": 1_000_000,
     },
-    "omega": {
-        "title": "Omega",
-        "badge": "1.11B CPS",
-        "taps_per_tick": 100000000,
-        "desc": "100,000,000 clicks per batch (90ms interval).",
+    "100m": {
+        "title": "100,000,000",
+        "badge": "~1.1B CPS",
+        "taps_per_tick": 100_000_000,
     },
-    "maxcap": {
-        "title": "Max Cap",
-        "badge": "2.14B",
+    "max": {
+        "title": "MAX",
+        "badge": "2.14B / tap",
         "taps_per_tick": MAX_INT32_CAP,
-        "desc": "2,147,483,646 clicks per batch (BongoCat hard game cap).",
     },
 }
 
@@ -191,7 +189,7 @@ class BongoDirectIPC:
                 self.connected = False
 
 class ClickerEngine:
-    def __init__(self, preset_key="overdrive"):
+    def __init__(self, preset_key="1k"):
         self.ipc = BongoDirectIPC()
         self.preset_key = preset_key
         self.taps_per_tick = PRESETS[preset_key]["taps_per_tick"]
@@ -203,39 +201,23 @@ class ClickerEngine:
         self.active_duration = 0.0
         self.last_state_change = time.perf_counter()
         self.ipc_status_text = "Waiting..."
-
-        self.smart_pause = True
-        self.sound_enabled = False
         self.target_pid = None
 
     def set_preset(self, preset_key: str):
         self.preset_key = preset_key
-        self.taps_per_tick = PRESETS.get(preset_key, PRESETS["overdrive"])["taps_per_tick"]
+        self.taps_per_tick = PRESETS.get(preset_key, PRESETS["1k"])["taps_per_tick"]
 
     def set_custom_taps(self, taps: int):
         self.taps_per_tick = max(1, min(MAX_INT32_CAP, int(taps)))
-
-    def set_interval_ms(self, ms: int):
-        self.tick_interval_ms = max(20, min(1000, int(ms)))
 
     def toggle(self):
         now = time.perf_counter()
         if self.running:
             self.running = False
             self.active_duration += now - self.last_state_change
-            if self.sound_enabled:
-                try:
-                    winsound.Beep(600, 60)
-                except Exception:
-                    pass
         else:
             self.running = True
             self.last_state_change = now
-            if self.sound_enabled:
-                try:
-                    winsound.Beep(1200, 60)
-                except Exception:
-                    pass
 
     def shutdown(self):
         self.shutdown_requested = True
@@ -256,12 +238,6 @@ class ClickerEngine:
     def run_loop(self):
         while not self.shutdown_requested:
             if self.running and self.ipc.connected:
-                if self.smart_pause:
-                    user_busy = any(bool(user32.GetAsyncKeyState(vk) & 0x8000) for vk in USER_INTERACTIVE_KEYS)
-                    if user_busy:
-                        time.sleep(0.020)
-                        continue
-
                 batch = self.taps_per_tick
                 if self.ipc.send_taps(batch):
                     self.total_clicks += batch
@@ -352,31 +328,46 @@ class RoundedStatCard:
         else:
             self.canvas.configure(bg="#FFFFFF", highlightthickness=1, highlightbackground="#E2E8F0")
 
-        self.title_id = self.canvas.create_text(width // 2, 18, text=title, font=("Segoe UI", 7, "bold"), fill=accent_color)
-        self.val_id = self.canvas.create_text(width // 2, 42, text=initial_val, font=("Segoe UI", 13, "bold"), fill="#0F172A")
+        self.title_id = self.canvas.create_text(width // 2, 18, text=title, font=(FONT_FAMILY, 8, "bold"), fill=accent_color)
+        self.val_id = self.canvas.create_text(width // 2, 42, text=initial_val, font=(FONT_FAMILY, 14, "bold"), fill="#0F172A")
 
     def pack(self, **kwargs):
         self.canvas.pack(**kwargs)
 
     def set_value(self, val_str: str):
         if len(val_str) > 13:
-            font = ("Segoe UI", 9, "bold")
+            font = (FONT_FAMILY, 9, "bold")
         elif len(val_str) > 9:
-            font = ("Segoe UI", 11, "bold")
+            font = (FONT_FAMILY, 11, "bold")
         else:
-            font = ("Segoe UI", 13, "bold")
+            font = (FONT_FAMILY, 14, "bold")
         self.canvas.itemconfig(self.val_id, text=val_str, font=font)
 
 class BongoApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Bongo Cat Auto Clicker")
-        self.root.geometry("520x460")
+        self.root.geometry("520x480")
         self.root.resizable(False, False)
         self.root.configure(bg="#F8FAFC")
 
+        assets_dir = os.path.join(os.path.dirname(__file__), "assets")
+        ico_path = os.path.join(assets_dir, "bongo.ico")
+        png_path = os.path.join(assets_dir, "bongo_icon.png")
+        if os.path.exists(ico_path):
+            try:
+                self.root.iconbitmap(ico_path)
+            except Exception:
+                pass
+        if HAS_PIL and os.path.exists(png_path):
+            try:
+                self.app_icon = ImageTk.PhotoImage(Image.open(png_path).resize((64, 64), Image.Resampling.LANCZOS))
+                self.root.iconphoto(True, self.app_icon)
+            except Exception:
+                pass
+
         winmm.timeBeginPeriod(1)
-        self.engine = ClickerEngine(preset_key="overdrive")
+        self.engine = ClickerEngine(preset_key="1k")
 
         self.pipe_thread = threading.Thread(target=self.engine.pipe_worker, daemon=True)
         self.pipe_thread.start()
@@ -413,7 +404,7 @@ class BongoApp:
         if not banner_loaded:
             self.lbl_banner = tk.Canvas(self.root, width=520, height=120, bg="#F43F5E", highlightthickness=0)
             self.lbl_banner.pack(fill=tk.X, side=tk.TOP)
-            self.lbl_banner.create_text(260, 60, text="🐾 Bongo Cat Auto Clicker 🐾", font=("Segoe UI", 20, "bold"), fill="#FFFFFF")
+            self.lbl_banner.create_text(260, 60, text="🐾 Bongo Cat Auto Clicker 🐾", font=(FONT_FAMILY, 20, "bold"), fill="#FFFFFF")
 
         # 2. Main Content
         self.content = tk.Frame(self.root, bg="#F8FAFC")
@@ -426,13 +417,13 @@ class BongoApp:
         status_left = tk.Frame(status_bar, bg="#F8FAFC")
         status_left.pack(side=tk.LEFT)
 
-        self.status_dot = tk.Label(status_left, text="●", font=("Segoe UI", 10), fg="#94A3B8", bg="#F8FAFC")
+        self.status_dot = tk.Label(status_left, text="●", font=(FONT_FAMILY, 10), fg="#94A3B8", bg="#F8FAFC")
         self.status_dot.pack(side=tk.LEFT, padx=(0, 5))
 
         self.status_text = tk.Label(
             status_left,
             text="CONNECTING...",
-            font=("Segoe UI", 9, "bold"),
+            font=(FONT_FAMILY, 9, "bold"),
             fg="#64748B",
             bg="#F8FAFC",
         )
@@ -440,8 +431,8 @@ class BongoApp:
 
         self.lbl_preset_tag = tk.Label(
             status_bar,
-            text="~1.1k CPS",
-            font=("Segoe UI", 8, "bold"),
+            text="~11k CPS",
+            font=(FONT_FAMILY, 8, "bold"),
             fg="#0F172A",
             bg="#FFFFFF",
             padx=8,
@@ -472,7 +463,7 @@ class BongoApp:
         self.btn_toggle = tk.Button(
             self.content,
             text="▶  START FARMING  (F8)",
-            font=("Segoe UI", 11, "bold"),
+            font=(FONT_FAMILY, 11, "bold"),
             fg="#FFFFFF",
             bg="#F8FAFC",
             activebackground="#F8FAFC",
@@ -493,8 +484,8 @@ class BongoApp:
 
         self.btn_settings = tk.Button(
             ctrl_bar,
-            text="⚙️  Speed & Settings",
-            font=("Segoe UI", 8, "bold"),
+            text="⚙️  Speed Settings",
+            font=(FONT_FAMILY, 8, "bold"),
             bg="#FFFFFF",
             fg="#334155",
             activebackground="#F1F5F9",
@@ -515,7 +506,7 @@ class BongoApp:
             ctrl_bar,
             text="📌 Always on Top",
             variable=self.top_var,
-            font=("Segoe UI", 8, "bold"),
+            font=(FONT_FAMILY, 8, "bold"),
             fg="#64748B",
             bg="#F8FAFC",
             activebackground="#F8FAFC",
@@ -531,163 +522,55 @@ class BongoApp:
 
         hdr = tk.Frame(self.settings_frame, bg="#F1F5F9", padx=12, pady=6)
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text="FULL INJECTION SETTINGS", font=("Segoe UI", 8, "bold"), fg="#475569", bg="#F1F5F9").pack(side=tk.LEFT)
+        tk.Label(hdr, text="SPEED & BATCH SETTINGS", font=(FONT_FAMILY, 8, "bold"), fg="#475569", bg="#F1F5F9").pack(side=tk.LEFT)
 
-        inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=12, pady=8)
+        inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=14, pady=10)
         inner.pack(fill=tk.BOTH, expand=True)
 
-        # Preset selection
-        tk.Label(inner, text="Speed Presets:", font=("Segoe UI", 8, "bold"), fg="#334155", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 4))
-
+        # Speed Presets Bar
         presets_bar = tk.Frame(inner, bg="#FFFFFF")
-        presets_bar.pack(fill=tk.X, pady=(0, 6))
+        presets_bar.pack(fill=tk.X, pady=(0, 8))
 
         self.preset_buttons = {}
-        for key in ["overdrive", "hyper", "infinity", "omega", "maxcap"]:
+        for key in ["1k", "100k", "1m", "100m", "max"]:
             cfg = PRESETS[key]
             btn = tk.Button(
                 presets_bar,
                 text=f"{cfg['title']}\n{cfg['badge']}",
-                font=("Segoe UI", 7, "bold"),
+                font=(FONT_FAMILY, 8, "bold"),
                 relief=tk.FLAT,
                 bd=0,
                 cursor="hand2",
-                pady=3,
+                pady=4,
                 command=lambda k=key: self.select_preset(k),
             )
-            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=1)
+            btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=2)
             self.preset_buttons[key] = btn
 
-        # Batch Size Row
+        # Batch Size Entry Row
         taps_row = tk.Frame(inner, bg="#FFFFFF")
-        taps_row.pack(fill=tk.X, pady=(2, 4))
+        taps_row.pack(fill=tk.X, pady=(2, 6))
 
-        tk.Label(taps_row, text="Batch size (90ms):", font=("Segoe UI", 8, "bold"), fg="#334155", bg="#FFFFFF").pack(side=tk.LEFT)
-
-        btn_m100k = tk.Button(
-            taps_row, text="−100k", font=("Segoe UI", 7, "bold"), width=5, bg="#F1F5F9", fg="#334155",
-            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
-            command=lambda: self.adjust_taps(-100000)
-        )
-        btn_m100k.pack(side=tk.LEFT, padx=(6, 1))
-
-        btn_m10k = tk.Button(
-            taps_row, text="−10k", font=("Segoe UI", 7, "bold"), width=4, bg="#F1F5F9", fg="#334155",
-            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
-            command=lambda: self.adjust_taps(-10000)
-        )
-        btn_m10k.pack(side=tk.LEFT, padx=(1, 2))
+        tk.Label(taps_row, text="Batch size:", font=(FONT_FAMILY, 8, "bold"), fg="#334155", bg="#FFFFFF").pack(side=tk.LEFT)
 
         self.entry_taps = tk.Entry(
-            taps_row, width=12, font=("Segoe UI", 9, "bold"), justify=tk.CENTER,
+            taps_row, width=16, font=(FONT_FAMILY, 9, "bold"), justify=tk.CENTER,
             bg="#FFFFFF", fg="#0F172A", insertbackground="#0F172A", bd=0,
             highlightthickness=1, highlightbackground="#CBD5E1", highlightcolor="#2563EB"
         )
         self.entry_taps.insert(0, f"{self.engine.taps_per_tick:,}")
-        self.entry_taps.pack(side=tk.LEFT, padx=2)
+        self.entry_taps.pack(side=tk.LEFT, padx=(8, 4))
         self.entry_taps.bind("<Return>", self.on_entry_taps_submit)
         self.entry_taps.bind("<FocusOut>", self.on_entry_taps_submit)
 
-        btn_p10k = tk.Button(
-            taps_row, text="+10k", font=("Segoe UI", 7, "bold"), width=4, bg="#F1F5F9", fg="#334155",
-            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
-            command=lambda: self.adjust_taps(+10000)
-        )
-        btn_p10k.pack(side=tk.LEFT, padx=(2, 1))
-
-        btn_p100k = tk.Button(
-            taps_row, text="+100k", font=("Segoe UI", 7, "bold"), width=5, bg="#F1F5F9", fg="#334155",
-            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
-            command=lambda: self.adjust_taps(+100000)
-        )
-        btn_p100k.pack(side=tk.LEFT, padx=(1, 4))
-
-        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 8, "bold"), fg="#059669", bg="#FFFFFF")
+        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=(FONT_FAMILY, 8, "bold"), fg="#059669", bg="#FFFFFF")
         self.lbl_calculated_cps.pack(side=tk.RIGHT)
-
-        # Quick Jump Row
-        quick_row = tk.Frame(inner, bg="#FFFFFF")
-        quick_row.pack(fill=tk.X, pady=(2, 4))
-        tk.Label(quick_row, text="Quick jump:", font=("Segoe UI", 7, "bold"), fg="#64748B", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 3))
-        for q_val in [100, 10000, 1000000, 10000000, 100000000, MAX_INT32_CAP]:
-            if q_val == MAX_INT32_CAP:
-                q_txt = "MAX (2.14B)"
-            elif q_val >= 1_000_000_000:
-                q_txt = f"{q_val // 1_000_000_000}B"
-            elif q_val >= 1_000_000:
-                q_txt = f"{q_val // 1_000_000}M"
-            elif q_val >= 1000:
-                q_txt = f"{q_val // 1000}k"
-            else:
-                q_txt = str(q_val)
-            q_btn = tk.Button(
-                quick_row,
-                text=q_txt,
-                font=("Segoe UI", 7, "bold"),
-                bg="#F8FAFC",
-                fg="#334155",
-                activebackground="#E2E8F0",
-                relief=tk.FLAT,
-                bd=0,
-                highlightthickness=1,
-                highlightbackground="#E2E8F0",
-                padx=5,
-                pady=1,
-                cursor="hand2",
-                command=lambda v=q_val: self.set_batch_value(v),
-            )
-            q_btn.pack(side=tk.LEFT, padx=1)
 
         # Smooth Logarithmic Slider
         slider_frame = tk.Frame(inner, bg="#FFFFFF")
-        slider_frame.pack(fill=tk.X, pady=(2, 6))
+        slider_frame.pack(fill=tk.X, pady=(2, 4))
         self.log_slider = LogSlider(slider_frame, initial_val=self.engine.taps_per_tick, on_change=self.on_slider_change)
         self.log_slider.pack(fill=tk.X)
-
-        # Advanced Settings Row
-        adv_row = tk.Frame(inner, bg="#FFFFFF")
-        adv_row.pack(fill=tk.X, pady=(4, 2))
-
-        # Interval adjustment
-        interval_frame = tk.Frame(adv_row, bg="#FFFFFF")
-        interval_frame.pack(side=tk.LEFT)
-        tk.Label(interval_frame, text="Interval:", font=("Segoe UI", 7, "bold"), fg="#475569", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 4))
-        btn_im = tk.Button(interval_frame, text="−10", font=("Segoe UI", 7, "bold"), width=3, bg="#F1F5F9", bd=0, highlightthickness=1, highlightbackground="#E2E8F0", command=lambda: self.adjust_interval(-10))
-        btn_im.pack(side=tk.LEFT, padx=1)
-        self.lbl_interval = tk.Label(interval_frame, text=f"{self.engine.tick_interval_ms}ms", font=("Segoe UI", 8, "bold"), fg="#0F172A", bg="#FFFFFF", width=6)
-        self.lbl_interval.pack(side=tk.LEFT)
-        btn_ip = tk.Button(interval_frame, text="+10", font=("Segoe UI", 7, "bold"), width=3, bg="#F1F5F9", bd=0, highlightthickness=1, highlightbackground="#E2E8F0", command=lambda: self.adjust_interval(+10))
-        btn_ip.pack(side=tk.LEFT, padx=1)
-
-        # Smart Pause Checkbox
-        self.pause_var = tk.BooleanVar(value=True)
-        chk_pause = tk.Checkbutton(
-            adv_row, text="Smart Pause (Hold)", variable=self.pause_var,
-            font=("Segoe UI", 7, "bold"), fg="#475569", bg="#FFFFFF", activebackground="#FFFFFF",
-            command=self.on_pause_toggle
-        )
-        chk_pause.pack(side=tk.LEFT, padx=(12, 0))
-
-        # Audio Beep Checkbox
-        self.sound_var = tk.BooleanVar(value=False)
-        chk_sound = tk.Checkbutton(
-            adv_row, text="Sound Beep", variable=self.sound_var,
-            font=("Segoe UI", 7, "bold"), fg="#475569", bg="#FFFFFF", activebackground="#FFFFFF",
-            command=self.on_sound_toggle
-        )
-        chk_sound.pack(side=tk.LEFT, padx=(8, 0))
-
-        # Minimal Note / Description
-        self.lbl_desc_body = tk.Label(
-            inner,
-            text="",
-            font=("Segoe UI", 8),
-            fg="#64748B",
-            bg="#FFFFFF",
-            anchor=tk.W,
-            justify=tk.LEFT,
-        )
-        self.lbl_desc_body.pack(fill=tk.X, pady=(2, 0))
 
         self.update_preset_buttons_ui()
 
@@ -729,10 +612,8 @@ class BongoApp:
             cps_str = f"~{cps:,} CPS"
             desc_str = f"{self.engine.taps_per_tick:,} clicks per {self.engine.tick_interval_ms}ms ({cps_str})."
 
-        self.lbl_desc_body.configure(text=desc_str)
         self.lbl_calculated_cps.configure(text=f"≈ {cps_str}")
         self.lbl_preset_tag.configure(text=cps_str)
-        self.lbl_interval.configure(text=f"{self.engine.tick_interval_ms}ms")
 
     def on_slider_change(self, val):
         self.engine.set_custom_taps(val)
@@ -745,31 +626,16 @@ class BongoApp:
         val = parse_taps_input(raw)
         self.set_batch_value(val)
 
-    def adjust_taps(self, delta):
-        cur = self.engine.taps_per_tick
-        self.set_batch_value(cur + delta)
-
-    def adjust_interval(self, delta):
-        new_int = max(20, min(500, self.engine.tick_interval_ms + delta))
-        self.engine.set_interval_ms(new_int)
-        self.update_preset_buttons_ui()
-
-    def on_pause_toggle(self):
-        self.engine.smart_pause = self.pause_var.get()
-
-    def on_sound_toggle(self):
-        self.engine.sound_enabled = self.sound_var.get()
-
     def toggle_settings_panel(self):
         self.show_settings = not self.show_settings
         if self.show_settings:
             self.settings_frame.pack(fill=tk.X, pady=(10, 0))
-            self.root.geometry("520x720")
+            self.root.geometry("520x665")
             self.btn_settings.configure(text="▲  Close Settings", bg="#E2E8F0")
         else:
             self.settings_frame.pack_forget()
-            self.root.geometry("520x460")
-            self.btn_settings.configure(text="⚙️  Speed & Settings", bg="#FFFFFF")
+            self.root.geometry("520x480")
+            self.btn_settings.configure(text="⚙️  Speed Settings", bg="#FFFFFF")
 
     def update_always_on_top(self):
         self.root.attributes("-topmost", self.top_var.get())
@@ -840,7 +706,7 @@ def run_cli():
         kernel32.SetConsoleMode(handle, mode.value | 0x0004)
 
     winmm.timeBeginPeriod(1)
-    engine = ClickerEngine(preset_key="overdrive")
+    engine = ClickerEngine(preset_key="1k")
 
     pipe_thread = threading.Thread(target=engine.pipe_worker, daemon=True)
     pipe_thread.start()
