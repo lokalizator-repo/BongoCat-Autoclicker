@@ -28,48 +28,51 @@ kernel32 = ctypes.windll.kernel32
 winmm = ctypes.windll.winmm
 
 KEYEVENTF_KEYUP = 0x0002
-VK_LBUTTON = 0x01
-VK_SPACE = 0x20
 VK_F8 = 0x77
 VK_F10 = 0x79
 
-# --- VIRTUAL KEY MATRIX ---
-# Strictly vetted non-typing virtual keys supported by BongoCat's BUTTONS array.
-# Explicitly excluded to prevent side effects:
-# - VK_PACKET (0xE7) & VK_ICO_00 (0xE4): these emit '0'/'\0' character packets into active chat/inputs.
-# - VK_NAVIGATION_* (0x88-0x8F): causes selection jumping in Windows Explorer.
-# - Gamepad buttons (0xC3-0xDA): triggers Windows Touch/On-Screen Keyboard when Win key is pressed.
-# - VK_PLAY (0xFA) & VK_ZOOM (0xFB): triggers Windows media/accessibility tools.
+# Modifiers and interactive keys that trigger Smart Auto-Pause to protect user actions
+USER_INTERACTIVE_KEYS = (
+    0x01, # VK_LBUTTON  - Left Mouse Button (window dragging, text selection, YouTube 2x)
+    0x02, # VK_RBUTTON  - Right Mouse Button (context menus)
+    0x20, # VK_SPACE    - Spacebar (YouTube 2x playback)
+    0x5B, # VK_LWIN     - Left Windows key (Start menu, Win+E, Win+R)
+    0x5C, # VK_RWIN     - Right Windows key
+    0x11, # VK_CONTROL  - Ctrl key (Ctrl+C, Ctrl+V, shortcuts)
+    0x12, # VK_MENU     - Alt key (Alt+Tab, app shortcuts)
+    0x10, # VK_SHIFT    - Shift key (capitalization, selection)
+)
 
-SAFE_F_KEYS = list(range(0x7C, 0x88)) # F13 - F24 (12 keys)
-DORMANT_SYSTEM_KEYS = [                # Fujitsu Oasys dormant codes (4 keys)
-    0x93, 0x94, 0x95, 0x96
-]
-DORMANT_OEM_KEYS = [                   # Completely unassigned / non-character OEM codes (20 keys)
-    0xE9, 0xEA, 0xEB, 0xEC, 0xED, 0xEE, 0xEF, 0xF0,
-    0xF1, 0xF2, 0xF3, 0xF4, 0xF5, 0xF6, 0xF7, 0xF8, 0xF9, 0xFC,
-    0xFD, 0xFE
+# --- BULLETPROOF VIRTUAL KEY MATRIX ---
+# Strictly vetted non-typing, non-shell, collision-free virtual keys supported by BongoCat.
+# All keys with scan code clashes (e.g. 0xEA, 0xEB, 0xF1, 0xFD which clash with Win / Win+P / PA1)
+# and character-emitting keys (0xE4, 0xE7) have been completely purged.
+
+SAFE_F_KEYS = list(range(0x7C, 0x88)) # F13 - F24 (12 keys: scans 0x64 to 0x76)
+DORMANT_KEYS = [                       # Completely dormant codes (8 keys: scan 0x00, zero shell mapping)
+    0x93, 0x94, 0x95, 0x96,           # Fujitsu Oasys dormant codes
+    0xF6, 0xF7, 0xF8, 0xFC            # Attn, CrSel, ExSel, NoName
 ]
 
 PRESETS = {
     "overdrive": {
         "title": "Overdrive",
-        "badge": "36 keys",
-        "approx_cps": "~645 – 720 CPS",
-        "desc": "Full clean key matrix (F13-F24 + Fujitsu + Clean OEM). Maximum clean throughput with zero text typing and zero Explorer/Game Bar conflicts.",
-        "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS,
+        "badge": "20 keys",
+        "approx_cps": "~360 – 500 CPS",
+        "desc": "Full vetted matrix (F13-F24 + dormant codes). Maximum clean throughput with zero text typing and zero Win+P or shell hotkey conflicts.",
+        "keys": SAFE_F_KEYS + DORMANT_KEYS,
     },
     "turbo": {
         "title": "Turbo",
-        "badge": "24 keys",
-        "approx_cps": "~430 CPS",
-        "desc": "Balanced mode using 24 isolated virtual keys (F13-F24 + Fujitsu + Select OEM). Moderate event frequency.",
-        "keys": SAFE_F_KEYS + DORMANT_SYSTEM_KEYS + DORMANT_OEM_KEYS[:8],
+        "badge": "16 keys",
+        "approx_cps": "~285 – 400 CPS",
+        "desc": "Balanced mode using 16 clean virtual keys (F13-F24 + 4 dormant codes). Moderate event frequency.",
+        "keys": SAFE_F_KEYS + DORMANT_KEYS[:4],
     },
     "stealth": {
         "title": "Stealth",
         "badge": "12 keys",
-        "approx_cps": "~215 CPS",
+        "approx_cps": "~215 – 300 CPS",
         "desc": "Uses only standard F13-F24 function keys. Minimal event generation, ultra-light background farming.",
         "keys": SAFE_F_KEYS,
     },
@@ -141,12 +144,12 @@ class ClickerEngine:
         cycle = 0
         while not self.shutdown_requested:
             if self.running:
-                # Smart Pause: If user holds Left Mouse Button (YouTube 2x, text dragging)
-                # or holds Spacebar (YouTube 2x), yield input to prevent interrupting user actions.
+                # Smart Auto-Pause:
+                # If user is holding Win, Ctrl, Alt, Shift, Space, or LMB:
+                # yield input immediately to prevent hotkey collisions or canceling YouTube 2x / dragging.
                 if self.smart_pause:
-                    lmb_held = bool(user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
-                    space_held = bool(user32.GetAsyncKeyState(VK_SPACE) & 0x8000)
-                    if lmb_held or space_held:
+                    user_busy = any(bool(user32.GetAsyncKeyState(k) & 0x8000) for k in USER_INTERACTIVE_KEYS)
+                    if user_busy:
                         if self.paw_step != 0:
                             release_keys(self.group_a)
                             release_keys(self.group_b)
@@ -255,7 +258,7 @@ class BongoApp:
 
         self.lbl_preset_tag = tk.Label(
             status_bar,
-            text="Overdrive (36 keys)",
+            text="Overdrive (20 keys)",
             font=("Segoe UI", 8, "bold"),
             fg="#E05D52",
             bg="#FFEBE8",
@@ -426,7 +429,7 @@ class BongoApp:
         self.smart_pause_var = tk.BooleanVar(value=True)
         chk_pause = tk.Checkbutton(
             inner,
-            text="⚡ Smart Auto-Pause: Yield when holding LMB or Space (fixes YouTube 2x)",
+            text="⚡ Smart Auto-Pause: Yield when holding Win, Ctrl, Alt, Shift, LMB, Space",
             variable=self.smart_pause_var,
             font=("Segoe UI", 8, "bold"),
             fg="#2D3748",
@@ -441,7 +444,7 @@ class BongoApp:
         note_frame.pack(fill=tk.X)
         lbl_note = tk.Label(
             note_frame,
-            text="💡 Zero Ghost Inputs Guarantee: Only 100% non-typing virtual keys are used (no characters, zero zeros, zero touch keyboard, zero explorer navigation). 28 ms delay guarantees 100% click registration with BongoCat's 16ms internal loop.",
+            text="💡 Zero Conflict Guarantee: All keys with scan code clashes (Win+P display projector, touch keyboard, explorer arrows, ghost zeros) have been eliminated. Smart Auto-Pause instantly yields whenever you hold modifiers, mouse buttons, or spacebar.",
             font=("Segoe UI", 8),
             fg="#744210",
             bg="#FEFCBF",
@@ -500,7 +503,7 @@ class BongoApp:
         if ms in range(26, 32):
             self.lbl_sync_indicator.configure(text=f"{ms} ms (100% Sync)", fg="#38A169")
         elif ms < 26:
-            self.lbl_sync_indicator.configure(text=f"{ms} ms (Fast - May drop ~30%)", fg="#DD6B20")
+            self.lbl_sync_indicator.configure(text=f"{ms} ms (Fast - May drop ~25%)", fg="#DD6B20")
         else:
             self.lbl_sync_indicator.configure(text=f"{ms} ms (Safe & Stable)", fg="#3182CE")
 

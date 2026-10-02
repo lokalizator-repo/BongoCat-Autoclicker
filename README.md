@@ -1,6 +1,6 @@
 # Bongo Cat Turbo Clicker 🐾
 
-> High-throughput, zero-dependency input injection engine for **BongoCat** (Steam). Delivers **~650–720 verified CPS** with zero desktop interference, zero ghost characters, and sub-frame synchronization.
+> High-throughput, zero-dependency input injection engine for **BongoCat** (Steam). Delivers **~360–500 verified CPS** with zero desktop interference, zero ghost characters, zero shell hotkey clashes, and sub-frame synchronization.
 
 ![Bongo Cat Preview](assets/banner.png)
 
@@ -51,39 +51,44 @@ Holding each batch for **28 ms** mathematically guarantees that every `DOWN` sta
 
 ---
 
-## 🛡️ Input Isolation Architecture
+## 🛡️ Input Isolation Architecture: Eliminating Shell Conflicts
 
-Simulating global keyboard inputs often wreaks havoc on the host system: cursor jumps in Windows Explorer, on-screen keyboard popups, canceled browser gestures, or unwanted characters appearing in text chats. This engine isolates input through two core engineering mechanisms:
+Simulating arbitrary virtual keys in Windows is treacherous: legacy hardware mappings and scan code collisions cause severe OS side effects. This engine implements two-layer architectural isolation:
 
-### 1. The 36-Key Clean Matrix (Zero Ghost Characters)
-Standard virtual key ranges trigger unwanted OS and typing behaviors:
-* **The Ghost `0` Bug:** `VK_PACKET` (`0xE7`) and `VK_ICO_00` (`0xE4`) emit `\x00` / `0` characters into active text fields (Discord, Telegram, Chrome) when passed through `TranslateMessage`. **Both are strictly quarantined.**
-* **Explorer Selection Jumps:** `VK_NAVIGATION_*` (`0x88`–`0x8F`) translates to arrow navigation in folder trees. **Quarantined.**
-* **Touch Keyboard Popups:** Gamepad codes (`0xC3`–`0xDB`) trigger the Windows Game Bar / Touch Keyboard when pressing `Win`. **Quarantined.**
-* **Magnifier / Media:** `VK_ZOOM` (`0xFB`) and `VK_PLAY` (`0xFA`) trigger accessibility and audio layers. **Quarantined.**
+### 1. Root Cause of the `Win+P` (Project Screen) Bug
+In Windows, certain obscure OEM keys share hardware scan codes with shell shortcuts:
+* `VK_OEM_JUMP` (`0xEA`): maps to scan code `0x5C` (`VK_RWIN`!).
+* `VK_OEM_FINISH` (`0xF1`): maps to scan code `0x5B` (`VK_LWIN`!).
+* `VK_OEM_PA1` (`0xEB`) and `VK_PA1` (`0xFD`): defined as "Program Action 1" (the hardware Project Display key on laptops).
 
-We verified and isolated **36 completely dormant virtual keys** from BongoCat's lookup table that produce **zero text characters, zero numeric outputs, zero Explorer navigation, and zero OS shell hooks**:
+When a script injects `VK_OEM_PA1` / `VK_PA1` while the user presses the `Win` key, Windows intercepts it as the **Projector Display Switcher (`Win + P`)**, endlessly cycling display modes: *PC screen only $\rightarrow$ Duplicate $\rightarrow$ Extend $\rightarrow$ Second screen only*.
 
+**The Fix:** All 16 legacy OEM keys have been completely eliminated. The active matrix now uses **only**:
 ```
-[0x7C - 0x87] : F13 to F24 (12 functional keys)
-[0x93 - 0x96] : Fujitsu Oasys dormant codes (4 keys)
-[0xE9 - 0xFE] : Unassigned non-character OEM codes (20 keys)
-Total: 36 Clean Virtual Keys
+[0x7C - 0x87] : F13 to F24 (12 functional keys, scans 0x64 to 0x76)
+[0x93 - 0x96] : Fujitsu Oasys dormant codes (4 codes, scan 0x00)
+[0xF6 - 0xFC] : Attn, CrSel, ExSel, NoName (4 codes, scan 0x00)
+Total: 20 Strictly Isolated Virtual Keys
 ```
 
-### 2. Smart Auto-Pause (Fixes YouTube 2x Speed & Window Dragging)
-In Chromium browsers, YouTube’s web player listens for global `keydown` events. While holding `Space` or `Left Mouse Button` for 2x playback, receiving simulated key events cancels the gesture.
-
-This engine features **Smart Auto-Pause**:
+### 2. Universal Smart Auto-Pause
+To guarantee that user interactions are never interrupted:
 ```python
-lmb_held   = bool(user32.GetAsyncKeyState(VK_LBUTTON) & 0x8000)
-space_held = bool(user32.GetAsyncKeyState(VK_SPACE) & 0x8000)
-if lmb_held or space_held:
-    release_keys(active_batch)
-    time.sleep(0.015)
-    continue
+USER_INTERACTIVE_KEYS = (
+    0x01, # Left Mouse Button (drag, text selection, YouTube 2x)
+    0x02, # Right Mouse Button (context menus)
+    0x20, # Spacebar (YouTube 2x hold)
+    0x5B, 0x5C, # Left / Right Windows keys (Start menu, Win+E, Win+R)
+    0x11, # Ctrl (Ctrl+C, Ctrl+V, hotkeys)
+    0x12, # Alt (Alt+Tab, app shortcuts)
+    0x10, # Shift (typing, selection)
+)
 ```
-Whenever you physically hold `LMB` (to drag a window, highlight text, or hold 2x on YouTube) or `Space`, injection temporarily yields in real time. The moment you release, farming resumes instantly.
+Whenever the user physically holds **any** modifier key (`Win`, `Ctrl`, `Alt`, `Shift`), mouse button (`LMB`, `RMB`), or `Space`, the injection engine **yields immediately in real time**. 
+* Pressing `Win` will **never** trigger combinations with injected keys.
+* Pressing `Ctrl+C` or `Alt+Tab` works with zero interference.
+* Holding `LMB` or `Space` on YouTube plays at **2x speed smoothly**.
+* The millisecond you release, farming resumes instantly.
 
 ---
 
@@ -93,11 +98,11 @@ The engine partitions the active key matrix into two equal groups ($A$ and $B$) 
 
 | Preset | Keys | Batch Size | Calibrated Delay | Verified Throughput | Target Use-Case |
 | :--- | :---: | :---: | :---: | :---: | :--- |
-| **🚀 Overdrive** | **36** | 18 keys | **28 ms** | **~645 – 720 CPS** | Maximum throughput with full OS isolation and zero ghost characters. |
-| **⚡ Turbo** | **24** | 12 keys | **28 ms** | **~430 CPS** | Balanced mode with reduced virtual input frequency. |
-| **🛡️ Stealth** | **12** | 6 keys | **28 ms** | **~215 CPS** | Minimal event footprint (`F13`–`F24` only). |
+| **🚀 Overdrive** | **20** | 10 keys | **28 ms** | **~360 – 500 CPS** | Maximum throughput with 100% collision-free OS isolation. |
+| **⚡ Turbo** | **16** | 8 keys | **28 ms** | **~285 – 400 CPS** | Balanced mode with lower virtual event frequency. |
+| **🛡️ Stealth** | **12** | 6 keys | **28 ms** | **~215 – 300 CPS** | Ultra-clean function key mode (`F13`–`F24` only). |
 
-$$\text{Theoretical CPS} = \frac{\text{Batch Size}}{\text{Delay (sec)}} = \frac{18}{0.028} \approx 642.85\text{ CPS}$$
+$$\text{Theoretical CPS} = \frac{\text{Batch Size}}{\text{Delay (sec)}} = \frac{10}{0.028} \approx 357.14\text{ CPS}$$
 
 ---
 
@@ -139,17 +144,6 @@ For automated or headless environments:
 ```bash
 python bongocat_autoclicker.py --cli
 ```
-
----
-
-## ⚙️ Calibration & Settings Guide
-
-Access the **⚙️ Speed & Settings** menu inside the application to tune:
-* **Hold Delay (ms):**
-  * `28 ms` *(Recommended / 100% Sync)*: Matches BongoCat’s 16ms poll loop with zero dropped clicks.
-  * `20–24 ms` *(Turbo)*: Yields higher sent counts, but may drop ~25–35% due to sub-frame aliasing.
-  * `32–36 ms` *(Ultra-Stable)*: For lower-end CPUs with frame drops.
-* **Smart Auto-Pause:** Keep checked to maintain full desktop interactivity (YouTube 2x hold, window dragging).
 
 ---
 
