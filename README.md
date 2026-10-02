@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/bongo_icon.png" width="160" alt="Bongo Cat Auto Clicker Icon">
   <h1>Bongo Cat Auto Clicker 🐾</h1>
-  <p><b>Быстрый, плавный и умный автокликер для BongoCat (Steam) без лагов и спама кнопками</b></p>
+  <p><b>High-throughput, zero-input clicker for BongoCat (Steam)</b></p>
 
   <p>
     <a href="https://github.com/lokalizator-repo/BongoCat-Autoclicker/releases/latest"><img src="https://img.shields.io/github/v/release/lokalizator-repo/BongoCat-Autoclicker?color=brightgreen&label=Download%20EXE" alt="Download EXE"></a>
@@ -13,29 +13,26 @@
 
 ---
 
-### 🐾 В чем фишка?
+### 🐾 How It Works
 
-Обычные автокликеры и макросы (Razer, Logitech, стандартные кликеры) спамят виртуальными кликами мыши или клавиатуры. Из-за этого:
-- Сбивается 2x-перемотка на YouTube при зажатии пробела или ЛКМ.
-- При нажатии `Win` залипают меню или открывается проектор `Win + P`.
-- Клики теряются, потому что игра не успевает их обрабатывать.
+Conventional autoclickers and mouse macros (Razer, Logitech) simulate physical mouse or keyboard clicks. This causes key conflicts, input lag, and caps out around 60 clicks per second due to the game's polling loop.
 
-**Bongo Cat Auto Clicker работает иначе:** он отправляет клики напрямую во внутренний канал игры (`Named Pipe IPC`).
-- ⚡ **Ноль конфликтов в Windows** — мышь и клавиатура полностью свободны. Можно спокойно печатать, играть или смотреть видео.
-- 🚀 **Любая скорость** — от умеренных 1,000 кликов до максимума игры (2.14 млрд).
-- 🎨 **Красивый интерфейс** — современный шрифт Bahnschrift, скругленные карточки, плавная логарифмическая шкала и темная тема кнопок.
+**Bongo Cat Auto Clicker connects directly to the game's internal IPC pipe (`Named Pipe`):**
+- ⚡ **Zero OS interference** — Does not send virtual keystrokes or mouse clicks. You can type, game, or browse freely while it runs in the background.
+- 🚀 **Extreme throughput** — From a gentle 1,000 taps to the game's hard cap of 2.14 billion per tick.
+- 🎛️ **Smooth controls** — Real-time telemetry, logarithmic speed slider, and global hotkey control.
 
 ---
 
-### 🚀 Быстрый старт
+### 🚀 Quickstart
 
-#### Вариант 1: Готовый `.exe` (Без установки Python)
-1. Скачай **[BongoCatAutoClicker.exe](https://github.com/lokalizator-repo/BongoCat-Autoclicker/releases/latest)** из раздела [Releases](https://github.com/lokalizator-repo/BongoCat-Autoclicker/releases).
-2. Запусти игру **BongoCat** в Steam.
-3. Запусти скачанный файл и нажми **F8** для старта / паузы.
+#### Option 1: Standalone `.exe` (Recommended)
+1. Download **[BongoCatAutoClicker.exe](https://github.com/lokalizator-repo/BongoCat-Autoclicker/releases/latest)** from the [Releases](https://github.com/lokalizator-repo/BongoCat-Autoclicker/releases) page.
+2. Launch **BongoCat** on Steam.
+3. Open `BongoCatAutoClicker.exe` and press **F8** to start / pause.
 
-#### Вариант 2: Запуск из исходников
-Если на компьютере установлен Python 3.8+:
+#### Option 2: Run from Source
+Requires Python 3.8+:
 ```bash
 git clone https://github.com/lokalizator-repo/BongoCat-Autoclicker.git
 cd BongoCat-Autoclicker
@@ -44,32 +41,32 @@ run.bat
 
 ---
 
-### ⌨️ Горячие клавиши
+### ⌨️ Hotkeys
 
-| Клавиша | Действие |
+| Key | Action |
 | :---: | :--- |
-| **`F8`** | **Старт / Пауза** (работает глобально в фоне, даже если окно свернуто) |
-| **`F10`** | **Быстрый выход** из программы |
+| **`F8`** | **Start / Pause** (Works globally in the background) |
+| **`F10`** | **Quick Exit** |
 
 ---
 
-### ⚡ Пресеты скорости
+### ⚡ Speed Presets
 
-В выпадающей панели **Speed Settings** можно выбрать готовый режим или ввести любое число вручную (поддерживаются суффиксы `k`, `m`, `b`, `max`):
+Click **Speed Settings** to pick a preset or enter any custom batch size (supports `k`, `m`, `b`, `max` suffixes):
 
-| Пресет | Кликов за такт | Скорость в секунду | Описание |
+| Preset | Taps / Batch | Estimated Rate | Description |
 | :---: | :---: | :---: | :--- |
-| **1,000** | 1,000 | ~11,000 CPS | Аккуратный ровный фарм |
-| **100,000** | 100,000 | ~1.1M CPS | Быстрый набор очков |
-| **1,000,000** | 1,000,000 | ~11.1M CPS | Десятки миллионов за секунды |
-| **100,000,000** | 100,000,000 | ~1.11B CPS | Миллиард очков в секунду |
-| **MAX** | 2,147,483,646 | 2.14B / такт | Максимальный лимит игры за один клик |
+| **1,000** | 1,000 | ~11,000 CPS | Steady baseline farming |
+| **100,000** | 100,000 | ~1.1M CPS | Rapid progression |
+| **1,000,000** | 1,000,000 | ~11.1M CPS | Tens of millions in seconds |
+| **100,000,000** | 100,000,000 | ~1.11B CPS | Over a billion clicks per second |
+| **MAX** | 2,147,483,646 | 2.14B / tap | Game's hard integer cap |
 
-> 💡 **Почему счетчик останавливается на ~2.14 млрд?**  
-> В самой игре BongoCat счетчик очков написан на 32-битном числе (`int32`), предел которого равен `2,147,483,646`. Выше игра физически не может прибавить очки. Потратьте накопленные очки в игровом магазине (на шапки и скины), и фарм снова продолжится!
+> 💡 **Why does the score stop increasing at ~2.14 Billion?**  
+> BongoCat stores points as a 32-bit signed integer (`int32`), which hard-caps at `2,147,483,646`. Spending points in the in-game shop frees up balance to farm more.
 
 ---
 
-### 📄 Лицензия
+### 📄 License
 
-Проект распространяется под свободной лицензией [MIT](LICENSE).
+Distributed under the [MIT](LICENSE) License.
