@@ -211,9 +211,9 @@ class ClickerEngine:
     def pipe_worker(self):
         while not self.shutdown_requested:
             if not self.ipc.connected:
-                self.ipc_status_text = "Waiting for BongoCat..."
+                self.ipc_status_text = "Waiting..."
                 if self.ipc.listen():
-                    self.ipc_status_text = "Connected (Direct IPC Active)"
+                    self.ipc_status_text = "Connected"
                 else:
                     time.sleep(0.5)
             else:
@@ -252,9 +252,9 @@ class BongoApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("Bongo Cat Turbo Clicker (Direct IPC)")
-        self.root.geometry("520x540")
+        self.root.geometry("520x460")
         self.root.resizable(False, False)
-        self.root.configure(bg="#FFF9F5")
+        self.root.configure(bg="#F8FAFC")
 
         winmm.timeBeginPeriod(1)
         self.engine = ClickerEngine(preset_key="overdrive")
@@ -274,7 +274,7 @@ class BongoApp:
         self.update_loop()
 
     def build_ui(self):
-        # 1. Authentic Header Banner
+        # 1. Header Banner
         banner_loaded = False
         banner_path = os.path.join(os.path.dirname(__file__), "assets", "banner.png")
 
@@ -293,88 +293,96 @@ class BongoApp:
                 banner_loaded = False
 
         if not banner_loaded:
-            self.lbl_banner = tk.Canvas(self.root, width=520, height=120, bg="#E77471", highlightthickness=0)
+            self.lbl_banner = tk.Canvas(self.root, width=520, height=120, bg="#F43F5E", highlightthickness=0)
             self.lbl_banner.pack(fill=tk.X, side=tk.TOP)
             self.lbl_banner.create_text(260, 60, text="🐾 Bongo Cat Turbo Clicker 🐾", font=("Segoe UI", 20, "bold"), fill="#FFFFFF")
 
         # 2. Main Content
-        self.content = tk.Frame(self.root, bg="#FFF9F5")
-        self.content.pack(fill=tk.BOTH, expand=True, padx=20, pady=(12, 16))
+        self.content = tk.Frame(self.root, bg="#F8FAFC")
+        self.content.pack(fill=tk.BOTH, expand=True, padx=18, pady=(12, 16))
 
-        # Status Badge Row
-        status_bar = tk.Frame(self.content, bg="#FFF9F5")
+        # Status Bar Row
+        status_bar = tk.Frame(self.content, bg="#F8FAFC")
         status_bar.pack(fill=tk.X, pady=(0, 10))
 
-        self.status_dot = tk.Label(status_bar, text="●", font=("Segoe UI", 12), fg="#A0AEC0", bg="#FFF9F5")
-        self.status_dot.pack(side=tk.LEFT, padx=(0, 6))
+        status_left = tk.Frame(status_bar, bg="#F8FAFC")
+        status_left.pack(side=tk.LEFT)
+
+        self.status_dot = tk.Label(status_left, text="●", font=("Segoe UI", 10), fg="#94A3B8", bg="#F8FAFC")
+        self.status_dot.pack(side=tk.LEFT, padx=(0, 5))
 
         self.status_text = tk.Label(
-            status_bar,
-            text="Connecting to BongoCat...",
+            status_left,
+            text="CONNECTING...",
             font=("Segoe UI", 9, "bold"),
-            fg="#4A5568",
-            bg="#FFF9F5",
+            fg="#64748B",
+            bg="#F8FAFC",
         )
         self.status_text.pack(side=tk.LEFT)
 
         self.lbl_preset_tag = tk.Label(
             status_bar,
-            text="Direct IPC (1,111 CPS)",
+            text="~1.1k CPS",
             font=("Segoe UI", 8, "bold"),
-            fg="#2B6CB0",
-            bg="#EBF8FF",
+            fg="#0F172A",
+            bg="#FFFFFF",
             padx=8,
             pady=2,
-            bd=1,
-            relief=tk.SOLID,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#E2E8F0",
         )
         self.lbl_preset_tag.pack(side=tk.RIGHT)
 
         # 3. Stat Cards Row
-        stats_frame = tk.Frame(self.content, bg="#FFF9F5")
-        stats_frame.pack(fill=tk.X, pady=(0, 12))
+        stats_frame = tk.Frame(self.content, bg="#F8FAFC")
+        stats_frame.pack(fill=tk.X, pady=(0, 10))
 
-        self.card_clicks = self.create_stat_card(stats_frame, "🐾 TOTAL CLICKS", "0", "#E05D52")
-        self.card_clicks.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 6))
+        self.card_clicks = self.create_stat_card(stats_frame, "TOTAL CLICKS", "0", "#E11D48")
+        self.card_clicks.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 4))
 
-        self.card_cps = self.create_stat_card(stats_frame, "⚡ CURRENT CPS", "0 CPS", "#3182CE")
-        self.card_cps.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=3)
+        self.card_cps = self.create_stat_card(stats_frame, "CURRENT CPS", "0 CPS", "#2563EB")
+        self.card_cps.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=2)
 
-        self.card_time = self.create_stat_card(stats_frame, "⏱️ TIME ACTIVE", "00:00", "#805AD5")
-        self.card_time.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(6, 0))
+        self.card_time = self.create_stat_card(stats_frame, "TIME ACTIVE", "00:00", "#7C3AED")
+        self.card_time.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(4, 0))
 
         # 4. Primary Big Action Button
         self.btn_toggle = tk.Button(
             self.content,
             text="▶  START FARMING  (F8)",
-            font=("Segoe UI", 12, "bold"),
-            bg="#FF6B6B",
+            font=("Segoe UI", 11, "bold"),
+            bg="#EF4444",
             fg="#FFFFFF",
-            activebackground="#FA5252",
+            activebackground="#DC2626",
             activeforeground="#FFFFFF",
             relief=tk.FLAT,
+            bd=0,
             cursor="hand2",
-            pady=11,
+            pady=10,
             command=self.engine.toggle,
         )
         self.btn_toggle.pack(fill=tk.X, pady=(0, 10))
 
         # 5. Quick Controls Row
-        ctrl_bar = tk.Frame(self.content, bg="#FFF9F5")
+        ctrl_bar = tk.Frame(self.content, bg="#F8FAFC")
         ctrl_bar.pack(fill=tk.X)
 
         self.btn_settings = tk.Button(
             ctrl_bar,
             text="⚙️  Speed & Settings",
-            font=("Segoe UI", 9, "bold"),
-            bg="#EDF2F7",
-            fg="#2D3748",
-            activebackground="#E2E8F0",
-            activeforeground="#1A202C",
+            font=("Segoe UI", 8, "bold"),
+            bg="#FFFFFF",
+            fg="#334155",
+            activebackground="#F1F5F9",
+            activeforeground="#0F172A",
             relief=tk.FLAT,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#CBD5E1",
             cursor="hand2",
             padx=12,
-            pady=5,
+            pady=4,
             command=self.toggle_settings_panel,
         )
         self.btn_settings.pack(side=tk.LEFT)
@@ -384,10 +392,10 @@ class BongoApp:
             ctrl_bar,
             text="📌 Always on Top",
             variable=self.top_var,
-            font=("Segoe UI", 9, "bold"),
-            fg="#4A5568",
-            bg="#FFF9F5",
-            activebackground="#FFF9F5",
+            font=("Segoe UI", 8, "bold"),
+            fg="#64748B",
+            bg="#F8FAFC",
+            activebackground="#F8FAFC",
             command=self.update_always_on_top,
         )
         self.chk_top.pack(side=tk.RIGHT)
@@ -396,99 +404,97 @@ class BongoApp:
         self.build_settings_panel()
 
     def create_stat_card(self, parent, title, initial_val, color):
-        frame = tk.Frame(parent, bg="#FFFFFF", bd=1, relief=tk.SOLID)
-        lbl_title = tk.Label(frame, text=title, font=("Segoe UI", 8, "bold"), fg=color, bg="#FFFFFF")
-        lbl_title.pack(anchor=tk.CENTER, pady=(8, 0))
-        lbl_val = tk.Label(frame, text=initial_val, font=("Segoe UI", 14, "bold"), fg="#1A202C", bg="#FFFFFF")
+        frame = tk.Frame(parent, bg="#FFFFFF", highlightbackground="#E2E8F0", highlightthickness=1, bd=0)
+        lbl_title = tk.Label(frame, text=title, font=("Segoe UI", 7, "bold"), fg=color, bg="#FFFFFF")
+        lbl_title.pack(anchor=tk.CENTER, pady=(8, 1))
+        lbl_val = tk.Label(frame, text=initial_val, font=("Segoe UI", 13, "bold"), fg="#0F172A", bg="#FFFFFF")
         lbl_val.pack(anchor=tk.CENTER, pady=(0, 8))
         frame.val_label = lbl_val
         return frame
 
     def build_settings_panel(self):
-        self.settings_frame = tk.Frame(self.content, bg="#FFFFFF", bd=1, relief=tk.SOLID)
+        self.settings_frame = tk.Frame(self.content, bg="#FFFFFF", highlightbackground="#CBD5E1", highlightthickness=1, bd=0)
 
-        # Header
-        hdr = tk.Frame(self.settings_frame, bg="#F7FAFC", padx=12, pady=8)
+        hdr = tk.Frame(self.settings_frame, bg="#F1F5F9", padx=12, pady=6)
         hdr.pack(fill=tk.X)
-        tk.Label(hdr, text="⚙️ DIRECT IPC SPEED & CALIBRATION", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#F7FAFC").pack(side=tk.LEFT)
+        tk.Label(hdr, text="INJECTION SETTINGS", font=("Segoe UI", 8, "bold"), fg="#475569", bg="#F1F5F9").pack(side=tk.LEFT)
 
-        inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=14, pady=10)
+        inner = tk.Frame(self.settings_frame, bg="#FFFFFF", padx=12, pady=8)
         inner.pack(fill=tk.BOTH, expand=True)
 
         # Preset selection
-        tk.Label(inner, text="Select Speed Preset:", font=("Segoe UI", 9, "bold"), fg="#2D3748", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 6))
+        tk.Label(inner, text="Presets:", font=("Segoe UI", 8, "bold"), fg="#334155", bg="#FFFFFF").pack(anchor=tk.W, pady=(0, 4))
 
         presets_bar = tk.Frame(inner, bg="#FFFFFF")
-        presets_bar.pack(fill=tk.X, pady=(0, 8))
+        presets_bar.pack(fill=tk.X, pady=(0, 6))
 
         self.preset_buttons = {}
         for key in ["overdrive", "hyper", "infinity", "omega", "maxcap"]:
             cfg = PRESETS[key]
             btn = tk.Button(
                 presets_bar,
-                text=f"{cfg['title']}\n({cfg['badge']})",
+                text=f"{cfg['title']}\n{cfg['badge']}",
                 font=("Segoe UI", 7, "bold"),
                 relief=tk.FLAT,
+                bd=0,
                 cursor="hand2",
-                pady=4,
+                pady=3,
                 command=lambda k=key: self.select_preset(k),
             )
             btn.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=1)
             self.preset_buttons[key] = btn
 
-        # Dynamic Description Card
-        self.card_desc = tk.Frame(inner, bg="#F8FAFC", bd=1, relief=tk.SOLID, padx=10, pady=8)
-        self.card_desc.pack(fill=tk.X, pady=(0, 10))
-
-        self.lbl_desc_speed = tk.Label(self.card_desc, text="", font=("Segoe UI", 9, "bold"), fg="#3182CE", bg="#F8FAFC")
-        self.lbl_desc_speed.pack(anchor=tk.W)
-
-        self.lbl_desc_body = tk.Label(self.card_desc, text="", font=("Segoe UI", 8), fg="#4A5568", bg="#F8FAFC", wraplength=440, justify=tk.LEFT)
-        self.lbl_desc_body.pack(anchor=tk.W, pady=(2, 0))
-
-        # Direct Taps Input & Steppers
+        # Batch Size Row
         taps_row = tk.Frame(inner, bg="#FFFFFF")
-        taps_row.pack(fill=tk.X, pady=(0, 4))
+        taps_row.pack(fill=tk.X, pady=(2, 4))
 
-        tk.Label(taps_row, text="Clicks Per Batch (every 90ms):", font=("Segoe UI", 8, "bold"), fg="#2D3748", bg="#FFFFFF").pack(side=tk.LEFT)
+        tk.Label(taps_row, text="Batch size (90ms):", font=("Segoe UI", 8, "bold"), fg="#334155", bg="#FFFFFF").pack(side=tk.LEFT)
 
         btn_m100k = tk.Button(
-            taps_row, text="−100k", font=("Segoe UI", 7, "bold"), width=5, bg="#EDF2F7", relief=tk.FLAT,
+            taps_row, text="−100k", font=("Segoe UI", 7, "bold"), width=5, bg="#F1F5F9", fg="#334155",
+            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
             command=lambda: self.adjust_taps(-100000)
         )
-        btn_m100k.pack(side=tk.LEFT, padx=(3, 1))
+        btn_m100k.pack(side=tk.LEFT, padx=(6, 1))
 
         btn_m10k = tk.Button(
-            taps_row, text="−10k", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
+            taps_row, text="−10k", font=("Segoe UI", 7, "bold"), width=4, bg="#F1F5F9", fg="#334155",
+            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
             command=lambda: self.adjust_taps(-10000)
         )
         btn_m10k.pack(side=tk.LEFT, padx=(1, 2))
 
-        self.entry_taps = tk.Entry(taps_row, width=12, font=("Segoe UI", 9, "bold"), justify=tk.CENTER, bd=1, relief=tk.SOLID)
+        self.entry_taps = tk.Entry(
+            taps_row, width=12, font=("Segoe UI", 9, "bold"), justify=tk.CENTER,
+            bg="#FFFFFF", fg="#0F172A", insertbackground="#0F172A", bd=0,
+            highlightthickness=1, highlightbackground="#CBD5E1", highlightcolor="#2563EB"
+        )
         self.entry_taps.insert(0, f"{self.engine.taps_per_tick:,}")
         self.entry_taps.pack(side=tk.LEFT, padx=2)
         self.entry_taps.bind("<Return>", self.on_entry_taps_submit)
         self.entry_taps.bind("<FocusOut>", self.on_entry_taps_submit)
 
         btn_p10k = tk.Button(
-            taps_row, text="+10k", font=("Segoe UI", 7, "bold"), width=4, bg="#EDF2F7", relief=tk.FLAT,
+            taps_row, text="+10k", font=("Segoe UI", 7, "bold"), width=4, bg="#F1F5F9", fg="#334155",
+            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
             command=lambda: self.adjust_taps(+10000)
         )
         btn_p10k.pack(side=tk.LEFT, padx=(2, 1))
 
         btn_p100k = tk.Button(
-            taps_row, text="+100k", font=("Segoe UI", 7, "bold"), width=5, bg="#EDF2F7", relief=tk.FLAT,
+            taps_row, text="+100k", font=("Segoe UI", 7, "bold"), width=5, bg="#F1F5F9", fg="#334155",
+            relief=tk.FLAT, bd=0, highlightthickness=1, highlightbackground="#E2E8F0", cursor="hand2",
             command=lambda: self.adjust_taps(+100000)
         )
-        btn_p100k.pack(side=tk.LEFT, padx=(1, 3))
+        btn_p100k.pack(side=tk.LEFT, padx=(1, 4))
 
-        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 8, "bold"), fg="#38A169", bg="#FFFFFF")
+        self.lbl_calculated_cps = tk.Label(taps_row, text="", font=("Segoe UI", 8, "bold"), fg="#059669", bg="#FFFFFF")
         self.lbl_calculated_cps.pack(side=tk.RIGHT)
 
         # Quick Jump Row
         quick_row = tk.Frame(inner, bg="#FFFFFF")
         quick_row.pack(fill=tk.X, pady=(2, 6))
-        tk.Label(quick_row, text="Quick Jump:", font=("Segoe UI", 8, "bold"), fg="#718096", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 2))
+        tk.Label(quick_row, text="Quick jump:", font=("Segoe UI", 7, "bold"), fg="#64748B", bg="#FFFFFF").pack(side=tk.LEFT, padx=(0, 3))
         for q_val in [100, 10000, 1000000, 10000000, 100000000, MAX_INT32_CAP]:
             if q_val == MAX_INT32_CAP:
                 q_txt = "MAX (2.14B)"
@@ -504,42 +510,31 @@ class BongoApp:
                 quick_row,
                 text=q_txt,
                 font=("Segoe UI", 7, "bold"),
-                bg="#EDF2F7",
-                fg="#4A5568",
+                bg="#F8FAFC",
+                fg="#334155",
+                activebackground="#E2E8F0",
                 relief=tk.FLAT,
-                padx=3,
+                bd=0,
+                highlightthickness=1,
+                highlightbackground="#E2E8F0",
+                padx=5,
                 pady=1,
                 cursor="hand2",
                 command=lambda v=q_val: self.set_batch_value(v),
             )
             q_btn.pack(side=tk.LEFT, padx=1)
 
-        self.slider = tk.Scale(
+        # Minimal Note / Description
+        self.lbl_desc_body = tk.Label(
             inner,
-            from_=10,
-            to=10000000,
-            orient=tk.HORIZONTAL,
-            showvalue=False,
-            bg="#FFFFFF",
-            highlightthickness=0,
-            command=self.on_slider_change,
-        )
-        self.slider.set(min(self.engine.taps_per_tick, 10000000))
-        self.slider.pack(fill=tk.X, pady=(0, 8))
-
-        # Technical Note
-        note_frame = tk.Frame(inner, bg="#E6FFFA", bd=1, relief=tk.SOLID, padx=8, pady=6)
-        note_frame.pack(fill=tk.X)
-        lbl_note = tk.Label(
-            note_frame,
-            text="✨ Native Direct IPC Mode: Direct memory pipe injection (BongoCatxTheFarmerWasReplaced). Accepts any number (supports 5M, 10M, 100M, MAX) up to BongoCat's hard cap of 2,147,483,646. Zero keyboard simulation, zero OS interference.",
+            text="",
             font=("Segoe UI", 8),
-            fg="#234E52",
-            bg="#E6FFFA",
-            wraplength=440,
+            fg="#64748B",
+            bg="#FFFFFF",
+            anchor=tk.W,
             justify=tk.LEFT,
         )
-        lbl_note.pack(anchor=tk.W)
+        self.lbl_desc_body.pack(fill=tk.X, pady=(2, 0))
 
         self.update_preset_buttons_ui()
 
@@ -550,50 +545,39 @@ class BongoApp:
 
     def set_batch_value(self, val: int):
         val = max(1, min(MAX_INT32_CAP, int(val)))
-        if val > self.slider.cget("to"):
-            self.slider.configure(to=val)
-        self.slider.set(min(val, self.slider.cget("to")))
         self.engine.set_custom_taps(val)
         self.entry_taps.delete(0, tk.END)
         self.entry_taps.insert(0, f"{val:,}")
         self.update_preset_buttons_ui()
 
     def update_preset_buttons_ui(self):
-        cur = self.engine.preset_key
         cur_taps = self.engine.taps_per_tick
         for key, btn in self.preset_buttons.items():
             if PRESETS[key]["taps_per_tick"] == cur_taps:
-                btn.configure(bg="#2B6CB0", fg="#FFFFFF", activebackground="#2C5282", activeforeground="#FFFFFF")
+                btn.configure(bg="#2563EB", fg="#FFFFFF", activebackground="#1D4ED8", activeforeground="#FFFFFF", highlightthickness=0)
             else:
-                btn.configure(bg="#EDF2F7", fg="#4A5568", activebackground="#E2E8F0", activeforeground="#1A202C")
+                btn.configure(bg="#F8FAFC", fg="#475569", activebackground="#E2E8F0", activeforeground="#0F172A", highlightthickness=1, highlightbackground="#E2E8F0")
 
-        cfg = PRESETS.get(cur, PRESETS["overdrive"])
         cps = int(self.engine.taps_per_tick / 0.090)
         if self.engine.taps_per_tick == MAX_INT32_CAP:
-            cps_str = "MAX GAME CAP (2.14B / tap)"
+            cps_str = "2.14B / tap"
+            desc_str = "2,147,483,646 taps per tick (BongoCat maximum score limit)."
         elif cps >= 1_000_000_000:
             cps_str = f"~{cps / 1_000_000_000:.2f}B CPS"
+            desc_str = f"{self.engine.taps_per_tick:,} clicks per 90ms batch ({cps_str})."
         elif cps >= 1_000_000:
             cps_str = f"~{cps / 1_000_000:.2f}M CPS"
+            desc_str = f"{self.engine.taps_per_tick:,} clicks per 90ms batch ({cps_str})."
         elif cps >= 10_000:
             cps_str = f"~{cps / 1_000:.1f}k CPS"
+            desc_str = f"{self.engine.taps_per_tick:,} clicks per 90ms batch ({cps_str})."
         else:
             cps_str = f"~{cps:,} CPS"
+            desc_str = f"{self.engine.taps_per_tick:,} clicks per 90ms batch ({cps_str})."
 
-        self.lbl_desc_speed.configure(text=f"Direct IPC Throughput: {cps_str}")
-        if cur in PRESETS and PRESETS[cur]["taps_per_tick"] == cur_taps:
-            self.lbl_desc_body.configure(text=cfg["desc"])
-        else:
-            self.lbl_desc_body.configure(text=f"Custom high-speed injection ({cur_taps:,} clicks / 90ms). Zero Windows interference, 100% click registration.")
+        self.lbl_desc_body.configure(text=desc_str)
         self.lbl_calculated_cps.configure(text=f"≈ {cps_str}")
-        self.lbl_preset_tag.configure(text=f"Direct IPC ({cps_str})")
-
-    def on_slider_change(self, val):
-        taps = int(val)
-        self.engine.set_custom_taps(taps)
-        self.entry_taps.delete(0, tk.END)
-        self.entry_taps.insert(0, f"{taps:,}")
-        self.update_preset_buttons_ui()
+        self.lbl_preset_tag.configure(text=cps_str)
 
     def on_entry_taps_submit(self, event=None):
         raw = self.entry_taps.get().strip()
@@ -608,12 +592,12 @@ class BongoApp:
         self.show_settings = not self.show_settings
         if self.show_settings:
             self.settings_frame.pack(fill=tk.X, pady=(10, 0))
-            self.root.geometry("520x890")
-            self.btn_settings.configure(text="▲  Close Settings", bg="#CBD5E0")
+            self.root.geometry("520x650")
+            self.btn_settings.configure(text="▲  Close Settings", bg="#E2E8F0")
         else:
             self.settings_frame.pack_forget()
-            self.root.geometry("520x540")
-            self.btn_settings.configure(text="⚙️  Speed & Settings", bg="#EDF2F7")
+            self.root.geometry("520x460")
+            self.btn_settings.configure(text="⚙️  Speed & Settings", bg="#FFFFFF")
 
     def update_always_on_top(self):
         self.root.attributes("-topmost", self.top_var.get())
@@ -634,17 +618,17 @@ class BongoApp:
 
         # Update Primary Button & Status Bar
         if self.engine.running:
-            self.btn_toggle.configure(text="⏸  PAUSE FARMING  (F8)", bg="#20C997", activebackground="#12B886")
-            self.status_dot.configure(fg="#38A169")
-            self.status_text.configure(text=f"FARMING ACTIVE - {self.engine.ipc_status_text}", fg="#276749")
+            self.btn_toggle.configure(text="⏸  PAUSE FARMING  (F8)", bg="#10B981", activebackground="#059669")
+            self.status_dot.configure(fg="#10B981")
+            self.status_text.configure(text="ACTIVE", fg="#059669")
         else:
-            self.btn_toggle.configure(text="▶  START FARMING  (F8)", bg="#FF6B6B", activebackground="#FA5252")
+            self.btn_toggle.configure(text="▶  START FARMING  (F8)", bg="#EF4444", activebackground="#DC2626")
             if self.engine.ipc.connected:
-                self.status_dot.configure(fg="#3182CE")
-                self.status_text.configure(text="READY - Connected (Press [F8] to start)", fg="#2B6CB0")
+                self.status_dot.configure(fg="#3B82F6")
+                self.status_text.configure(text="READY", fg="#2563EB")
             else:
-                self.status_dot.configure(fg="#DD6B20")
-                self.status_text.configure(text="WAITING - Launch BongoCat to connect", fg="#C05621")
+                self.status_dot.configure(fg="#F59E0B")
+                self.status_text.configure(text="CONNECTING...", fg="#D97706")
 
         # Update Stats Cards
         clicks_str = f"{self.engine.total_clicks:,}"

@@ -1,6 +1,6 @@
 # Bongo Cat Turbo Clicker 🐾
 
-> High-throughput, zero-dependency click farming engine for **BongoCat** (Steam). Powered by native internal Named Pipe Direct IPC (`\\.\pipe\BongoCatxTheFarmerWasReplaced`). Delivers **1,000–2,000+ verified CPS** with **zero synthetic keystrokes**, zero shell hotkey conflicts, zero ghost characters, and undisturbed desktop multitasking.
+> High-throughput click automation engine for **BongoCat** (Steam). Connects directly to BongoCat's native Named Pipe IPC (`\\.\pipe\BongoCatxTheFarmerWasReplaced`) for deterministic batch injection without OS keyboard simulation.
 
 ![Bongo Cat Preview](assets/banner.png)
 
@@ -105,11 +105,10 @@ GlobalKeyHook.Instance.OnKeyPressed.Invoke(_taps);
 
 By hosting this Named Pipe server, our engine delivers batch taps **directly into the game's core click accumulator**.
 
-#### Advantages of Direct IPC
-* **Zero Keystrokes:** No virtual keys are sent to Windows. Zero interference with typing, chatting, or gaming.
-* **Flawless YouTube 2x Speed:** Holding `LMB` or `Space` on YouTube works 100% without interruptions.
-* **Untouched Shell:** Start menu, `Win + P`, `Alt + Tab`, and Explorer selection function completely normally.
-* **Deterministic Throughput:** BongoCat consumes exact tap counts with zero dropped clicks.
+#### Architectural Benefits
+* **No Synthetic Input Events:** Bypasses `keybd_event` and `SendInput`. Does not touch the OS message queue or foreground windows.
+* **Deterministic Throughput:** Direct integer delivery into BongoCat's click accumulator at 90ms intervals.
+* **Full Shell Stability:** Browser playback gestures, modifiers, and system shortcuts remain completely unaffected.
 
 ---
 
