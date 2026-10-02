@@ -153,7 +153,7 @@ $$\text{Throughput (CPS)} = \frac{\text{Taps per Tick}}{0.090\text{ s}}$$
 ### Launching the Application
 1. Clone the repository:
    ```bash
-   git clone https://github.com/your-username/bongocat-auto-clicker.git
+   git clone https://github.com/lokalizator-repo/bongocat-auto-clicker.git
    cd bongocat-auto-clicker
    ```
 2. Run via launcher:
